@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { authMiddleware } from '../utils/authMiddleware.js';
 import { generateGapReport } from '../services/repoScanner.js';
 
 const router = Router();
 
-router.post('/scan', authMiddleware, async (req, res) => {
+router.post('/scan', async (req, res) => {
   try {
     const { repoUrl } = req.body ?? {};
     if (!repoUrl || typeof repoUrl !== 'string') {

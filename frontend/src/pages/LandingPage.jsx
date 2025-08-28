@@ -96,14 +96,11 @@ export default function LandingPage() {
               <a href="#faq" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors">
                 FAQ
               </a>
-              <Link to="/login" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors">
-                Login
-              </Link>
               <Link 
-                to="/signup"
+                to="/scan"
                 className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 hover:scale-105 transition-all duration-200 shadow-lg"
               >
-                Get Started
+                Start Scanning
               </Link>
             </div>
           </div>
@@ -134,7 +131,7 @@ export default function LandingPage() {
                   to="/scan"
                   className="inline-flex items-center px-8 py-4 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 transform hover:scale-105 transition-all duration-200 shadow-lg"
                 >
-                  Scan Your Repo
+                  Start Scanning Now
                   <ArrowRightIcon className="ml-2 h-5 w-5" />
                 </Link>
                 <button 
