@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import authRouter from './src/routes/auth.js';
 import scanRouter from './src/routes/scan.js';
 
 dotenv.config();
@@ -19,7 +18,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.use('/api', authRouter);
 app.use('/api', scanRouter);
 
 const PORT = process.env.PORT ?? 5000;

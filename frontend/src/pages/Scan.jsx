@@ -45,12 +45,6 @@ export default function Scan() {
               <Link to="/scan" className="text-emerald-600 font-medium">
                 Scan
               </Link>
-              <button 
-                onClick={() => {/* Add logout logic */}}
-                className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors"
-              >
-                Logout
-              </button>
             </div>
           </div>
         </div>
