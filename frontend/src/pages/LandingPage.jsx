@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { 
   CheckCircleIcon, 
   CogIcon, 
@@ -12,7 +12,15 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function LandingPage() {
+  const [searchParams] = useSearchParams();
   const [activeAccordion, setActiveAccordion] = useState(null);
+  const [authMessage, setAuthMessage] = useState('');
+
+  useEffect(() => {
+    if (searchParams.get('auth') === 'required') {
+      setAuthMessage('Please connect your GitHub account to access the scan feature.');
+    }
+  }, [searchParams]);
 
   const features = [
     {
@@ -96,12 +104,12 @@ export default function LandingPage() {
               <a href="#faq" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors">
                 FAQ
               </a>
-              <Link 
-                to="/scan"
+              <a 
+                href="http://localhost:5000/auth/github"
                 className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 hover:scale-105 transition-all duration-200 shadow-lg"
               >
-                Start Scanning
-              </Link>
+                Connect GitHub
+              </a>
             </div>
           </div>
         </div>
@@ -109,6 +117,11 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-emerald-400">
+        {authMessage && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+            <p className="font-medium">{authMessage}</p>
+          </div>
+        )}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div
@@ -127,13 +140,13 @@ export default function LandingPage() {
                 ShipIQ scans your GitHub repos and detects missing Dockerfiles, CI/CD pipelines, tests, and more — so you can ship with confidence.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
-                <Link
-                  to="/scan"
+                <a
+                  href="http://localhost:5000/auth/github"
                   className="inline-flex items-center px-8 py-4 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 transform hover:scale-105 transition-all duration-200 shadow-lg"
                 >
-                  Start Scanning Now
+                  Connect GitHub
                   <ArrowRightIcon className="ml-2 h-5 w-5" />
-                </Link>
+                </a>
                 <button 
                   onClick={() => document.getElementById('how-it-works').scrollIntoView({ behavior: 'smooth' })}
                   className="inline-flex items-center px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 hover:scale-105 transition-all duration-200 shadow-lg"

@@ -4,7 +4,10 @@ const rawBase = import.meta.env.VITE_API_URL || '';
 const trimmed = typeof rawBase === 'string' ? rawBase.replace(/\/$/, '') : '';
 const baseURL = `${trimmed}/api`;
 
-const api = axios.create({ baseURL });
+const api = axios.create({ 
+  baseURL,
+  withCredentials: true  // Include cookies for session-based auth
+});
 
 export default api;
 
