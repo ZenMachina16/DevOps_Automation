@@ -11,9 +11,11 @@ export default function Scan() {
   const [repositories, setRepositories] = useState([]);
   const [selectedRepo, setSelectedRepo] = useState('');
   const [result, setResult] = useState(null);
+  const [generatedFiles, setGeneratedFiles] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingRepos, setLoadingRepos] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const renderStatus = (value) => (value ? '✅' : '❌');
 
@@ -64,6 +66,7 @@ export default function Scan() {
       return;
     }
     setResult(null);
+    setGeneratedFiles(null);
     setError('');
     setLoading(true);
     try {
@@ -74,6 +77,33 @@ export default function Scan() {
       setError(err?.response?.data?.error || 'Scan failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onGenerateFiles = async () => {
+    if (!selectedRepo) {
+      setError('Please select a repository first');
+      return;
+    }
+    
+    setGeneratedFiles(null);
+    setError('');
+    setGenerating(true);
+    
+    try {
+      const selectedRepoData = repositories.find(r => r.fullName === selectedRepo);
+      const res = await api.post('/generate-files', { repoUrl: selectedRepoData.url });
+      
+      if (res.data.success) {
+        setGeneratedFiles(res.data.generatedFiles);
+      } else {
+        setError(res.data.error || 'File generation failed');
+      }
+    } catch (err) {
+      setError(err?.response?.data?.error || 'File generation failed');
+      console.error('Generation error:', err);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -206,7 +236,79 @@ export default function Scan() {
                     </tbody>
                   </table>
                 </div>
+                
+                {/* Generate Files Button */}
+                <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-600">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    Missing some DevOps files? Let our AI generate them for you!
+                  </p>
+                  <Button 
+                    onClick={onGenerateFiles}
+                    disabled={generating}
+                    variant="secondary"
+                    className="w-full"
+                  >
+                    {generating ? 'Generating Files with AI...' : '🤖 Generate Missing Files'}
+                  </Button>
+                </div>
               </div>
+            </div>
+          )}
+
+          {/* AI Generation Loading */}
+          {generating && (
+            <div className="mt-8">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></span>
+                  AI is generating your missing DevOps files... This may take 30-60 seconds.
+                </div>
+                <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Our AI is analyzing your repository and creating optimized configurations.
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* Generated Files Display */}
+          {generatedFiles && !generating && (
+            <div className="mt-8">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }} 
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-200 dark:border-slate-700"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">🎉</span>
+                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+                    Generated {generatedFiles.fileType}
+                  </h3>
+                </div>
+                
+                <div className="bg-slate-900 dark:bg-slate-950 rounded-lg p-4 overflow-x-auto">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 font-mono">
+                      {generatedFiles.fileType} • Generated at {new Date(generatedFiles.timestamp).toLocaleTimeString()}
+                    </span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(generatedFiles.content)}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                    >
+                      Copy to Clipboard
+                    </button>
+                  </div>
+                  <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">
+                    {generatedFiles.content}
+                  </pre>
+                </div>
+                
+                <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  <p className="text-sm text-emerald-800 dark:text-emerald-200">
+                    <strong>Next Steps:</strong> Copy the generated content and create the appropriate file in your repository. 
+                    The AI has analyzed your project structure and created an optimized configuration.
+                  </p>
+                </div>
+              </motion.div>
             </div>
           )}
         </div>
