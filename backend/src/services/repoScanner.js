@@ -39,7 +39,7 @@ async function fetchRepoTree({ owner, repo, branch = 'main' }) {
   throw lastError || new Error('Failed to fetch repository tree');
 }
 
-async function fetchPackageJson({ owner, repo, branchCandidates = ['main', 'master'] }) {
+export async function fetchPackageJson({ owner, repo, branchCandidates = ['main', 'master'] }) {
   const token = process.env.GITHUB_TOKEN;
   const headers = {
     'Accept': 'application/vnd.github.raw+json',

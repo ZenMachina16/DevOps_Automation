@@ -8,6 +8,7 @@ import { Strategy as GitHubStrategy } from 'passport-github2';
 import scanRouter from './src/routes/scan.js';
 import authRouter from './src/routes/auth.js';
 import generateRouter from './src/routes/generate.js';
+import githubWebhookRouter from './src/routes/githubWebhook.js';
 
 dotenv.config();
 
@@ -53,6 +54,7 @@ app.use('/auth', authRouter);
 app.use('/api', scanRouter);
 app.use('/api', generateRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/github', githubWebhookRouter);
 
 const PORT = process.env.PORT ?? 5000;
 app.listen(PORT, () => {
