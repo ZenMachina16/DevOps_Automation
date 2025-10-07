@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { generateGapReport } from '../services/repoScanner.js';
-import { langflowClient } from '../services/langflowClient.js';
+import { generateGapReport, fetchPackageJson, parseGitHubUrl } from '../services/repoScanner.js';
+import { n8nClient } from '../services/langflowClient.js';
 
 const router = Router();
 
@@ -23,7 +23,6 @@ router.post('/generate-files', async (req, res) => {
     console.log('Gap report:', gapReport);
 
     // Step 2: Get repository metadata (package.json, etc.)
-    const { fetchPackageJson, parseGitHubUrl } = await import('../services/repoScanner.js');
     const parsed = parseGitHubUrl(repoUrl);
     const metadata = await fetchPackageJson({ 
       owner: parsed.owner, 
@@ -31,8 +30,8 @@ router.post('/generate-files', async (req, res) => {
     });
     console.log('Repository metadata:', metadata);
 
-    // Step 3: Call Langflow agent to generate files
-    const generatedFiles = await langflowClient.generateFiles(repoUrl, gapReport, metadata);
+    // Step 3: Call n8n agent to generate files
+    const generatedFiles = await n8nClient.generateFiles(repoUrl, gapReport, metadata);
 
     // Step 4: Return combined results
     return res.json({
@@ -62,20 +61,17 @@ router.post('/generate-files', async (req, res) => {
 
 /**
  * GET /api/generate-status
- * Check if Langflow service is available
+ * Check if n8n service is available
  */
 router.get('/generate-status', async (req, res) => {
   try {
-    const isConfigured = !!(
-      process.env.LANGFLOW_API_URL && 
-      process.env.LANGFLOW_FLOW_ID
-    );
+    const webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/shipiq-agent-full';
+    const isConfigured = !!webhookUrl;
 
     return res.json({
       configured: isConfigured,
-      langflowUrl: process.env.LANGFLOW_API_URL ? 'Set' : 'Missing',
-      flowId: process.env.LANGFLOW_FLOW_ID ? 'Set' : 'Missing',
-      apiKey: process.env.LANGFLOW_API_KEY ? 'Set' : 'Not required',
+      webhookUrl: webhookUrl,
+      service: 'n8n',
       timestamp: new Date().toISOString()
     });
   } catch (error) {

@@ -1,0 +1,808 @@
+{
+  "name": "ShipIQ DevOps Agent – HTTP Request Nodes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shipiq-agent-full",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook - Receive Repo Data",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "shipiq-agent-full"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and parse input data with enhanced metadata and error handling\nconst inputData = $input.first().json.body || $input.first().json;\n\nlet repoData;\ntry {\n  if (typeof inputData.input_value === 'string') {\n    repoData = JSON.parse(inputData.input_value);\n  } else {\n    repoData = inputData.input_value || inputData;\n  }\n} catch (e) {\n  throw new Error(`Invalid input data: ${e.message}`);\n}\n\n// Validate required fields\nif (!repoData.repository?.name || !repoData.repository?.owner) {\n  throw new Error('Repository name and owner are required');\n}\n\n// Extract key information with fallbacks\nconst language = repoData.language || 'JavaScript';\nconst repositoryName = repoData.repository.name;\nconst repoOwner = repoData.repository.owner;\nconst repoUrl = repoData.repository.url || `https://github.com/${repoOwner}/${repositoryName}`;\nconst manifestFilename = repoData.manifest_filename || 'package.json';\nconst metadata = repoData.metadata || {};\nconst gapReport = Array.isArray(repoData.gap_report) ? repoData.gap_report : [];\nconst dependencies = JSON.stringify(metadata.dependencies || {}, null, 2);\nconst scripts = JSON.stringify(metadata.scripts || {}, null, 2);\nconst description = metadata.description || `A ${language} application`;\n\n// Determine file to generate with priority order\nlet fileType = 'dockerfile';\nlet fileName = 'Dockerfile';\nlet filePath = 'Dockerfile';\n\nif (gapReport.includes('missing_dockerfile')) {\n  fileType = 'dockerfile';\n  fileName = 'Dockerfile';\n  filePath = 'Dockerfile';\n} else if (gapReport.includes('missing_ci_cd_workflow')) {\n  fileType = 'cicd';\n  fileName = 'main.yml';\n  filePath = '.github/workflows/main.yml';\n} else if (gapReport.includes('missing_README_documentation')) {\n  fileType = 'readme';\n  fileName = 'README.md';\n  filePath = 'README.md';\n}\n\n// Generate unique identifiers\nconst timestamp = Date.now();\nconst branchName = `shipiq-devops-${fileType}-${timestamp}`;\nconst commitMessage = `feat: Add ${fileName} via ShipIQ DevOps Agent`;\n\nreturn {\n  json: {\n    language,\n    repositoryName,\n    repoOwner,\n    repoUrl,\n    manifestFilename,\n    dependencies,\n    scripts,\n    description,\n    gapReport,\n    fileType,\n    fileName,\n    filePath,\n    branchName,\n    commitMessage,\n    timestamp,\n    originalData: repoData,\n    attemptNumber: 1,\n    maxAttempts: 3,\n    workflowStartTime: new Date().toISOString()\n  }\n};"
+      },
+      "id": "extract-1",
+      "name": "Extract & Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.fileType }}",
+              "rightValue": "dockerfile",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "2",
+              "leftValue": "={{ $json.fileType }}",
+              "rightValue": "cicd",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "3",
+              "leftValue": "={{ $json.fileType }}",
+              "rightValue": "readme",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-1",
+      "name": "Route by File Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENROUTER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "openai/gpt-4o-mini"
+            },
+            {
+              "name": "messages",
+              "value": "=[\n  {\n    \"role\": \"system\",\n    \"content\": \"You are a DevOps expert specializing in Docker containerization. Generate production-ready Dockerfiles with error handling and best practices. Always respond with ONLY the Dockerfile content, no explanations or markdown formatting.\"\n  },\n  {\n    \"role\": \"user\",\n    \"content\": \"Generate a production-ready Dockerfile for this {{ $json.language }} application.\\n\\nRepository: {{ $json.repositoryName }}\\nPackage File: {{ $json.manifestFilename }}\\nDependencies: {{ $json.dependencies }}\\nScripts: {{ $json.scripts }}\\nAttempt: {{ $json.attemptNumber }}\\n\\nRequirements:\\n1. Use appropriate base image for {{ $json.language }}\\n2. Set working directory to /app\\n3. Copy package files and install dependencies with error handling\\n4. Copy source code\\n5. Expose appropriate port (3000 for frontend, 5000 for backend)\\n6. Use non-root user for security\\n7. Add health check if applicable\\n8. Optimize for production (multi-stage if beneficial)\\n9. Include proper error handling and logging\\n10. Add retry logic for network operations\\n\\nGenerate ONLY the Dockerfile content:\"\n  }\n]"
+            },
+            {
+              "name": "temperature",
+              "value": 0.2
+            },
+            {
+              "name": "max_tokens",
+              "value": 2500
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "generate-dockerfile",
+      "name": "Generate Dockerfile (OpenRouter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENROUTER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "openai/gpt-4o-mini"
+            },
+            {
+              "name": "messages",
+              "value": "=[\n  {\n    \"role\": \"system\",\n    \"content\": \"You are a DevOps expert specializing in CI/CD pipelines. Generate robust GitHub Actions workflows with comprehensive error handling and retry logic. Always respond with ONLY the YAML content, no explanations or markdown formatting.\"\n  },\n  {\n    \"role\": \"user\",\n    \"content\": \"Generate a GitHub Actions workflow for this {{ $json.language }} application.\\n\\nRepository: {{ $json.repositoryName }}\\nPackage File: {{ $json.manifestFilename }}\\nScripts Available: {{ $json.scripts }}\\nAttempt: {{ $json.attemptNumber }}\\n\\nRequirements:\\n1. Trigger on push to main and pull requests\\n2. Use appriate {{ $json.language }} version (Node 18+ for JS/TS)\\n3. Install dependencies using {{ $json.manifestFilename }} with retry logic\\n4. Run tests if test script exists with proper error handling\\n5. Run build if build script exists\\n6. Add comprehensive security scanning\\n7. Cache dependencies for faster builds with fallback\\n8. Run on ubuntu-latest with matrix strategy if needed\\n9. Include deployment status reporting\\n10. Add retry mechanisms for flaky operations\\n11. Include proper artifact management\\n12. Add rollback capabilities\\n\\nGenerate ONLY the .github/workflows/main.yml content:\"\n  }\n]"
+            },
+            {
+              "name": "temperature",
+              "value": 0.2
+            },
+            {
+              "name": "max_tokens",
+              "value": 3000
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "generate-cicd",
+      "name": "Generate CI/CD (OpenRouter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENROUTER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "openai/gpt-4o-mini"
+            },
+            {
+              "name": "messages",
+              "value": "=[\n  {\n    \"role\": \"system\",\n    \"content\": \"You are a technical writer specializing in project documentation. Generate comprehensive README files with troubleshooting guides. Always respond with ONLY the markdown content, no explanations or additional formatting.\"\n  },\n  {\n    \"role\": \"user\",\n    \"content\": \"Generate comprehensive README sections for this {{ $json.language }} application.\\n\\nRepository: {{ $json.repositoryName }}\\nDescription: {{ $json.description }}\\nScripts: {{ $json.scripts }}\\nDependencies: {{ $json.dependencies }}\\nAttempt: {{ $json.attemptNumber }}\\n\\nGenerate these README sections:\\n1. # {{ $json.repositoryName }} - Project title\\n2. ## Description - Based on metadata or inferred purpose\\n3. ## Installation - Step-by-step setup instructions with troubleshooting\\n4. ## Usage - How to run the application with examples\\n5. ## Scripts - Available npm/yarn scripts with descriptions\\n6. ## Dependencies - Key dependencies explanation\\n7. ## Troubleshooting - Common issues and solutions\\n8. ## Contributing - Basic contribution guidelines\\n9. ## License - Standard license section\\n\\nMake it professional, clear, and actionable. Include code blocks for commands and troubleshooting steps.\\nGenerate ONLY the README.md content:\"\n  }\n]"
+            },
+            {
+              "name": "temperature",
+              "value": 0.3
+            },
+            {
+              "name": "max_tokens",
+              "value": 3000
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "generate-readme",
+      "name": "Generate README (OpenRouter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process OpenRouter response and prepare for GitHub commit\nconst aiResponse = $input.first().json;\nconst inputData = $('Extract & Prepare Data').first().json;\n\n// Extract generated content from OpenRouter response\nlet generatedContent = '';\nif (aiResponse.choices && aiResponse.choices[0] && aiResponse.choices[0].message) {\n  generatedContent = aiResponse.choices[0].message.content;\n} else if (aiResponse.error) {\n  throw new Error(`OpenRouter API error: ${aiResponse.error.message}`);\n} else {\n  throw new Error('Unexpected OpenRouter response format');\n}\n\n// Clean up the content (remove any markdown formatting if present)\nif (generatedContent.includes('```')) {\n  const lines = generatedContent.split('\\n');\n  const startIndex = lines.findIndex(line => line.trim().startsWith('```'));\n  const endIndex = lines.findIndex((line, index) => index > startIndex && line.trim().endsWith('```'));\n  if (startIndex !== -1 && endIndex !== -1) {\n    generatedContent = lines.slice(startIndex + 1, endIndex).join('\\n');\n  }\n}\n\n// Prepare commit data\nconst commitData = {\n  ...inputData,\n  generatedContent: generatedContent.trim(),\n  contentLength: generatedContent.trim().length,\n  modelUsed: 'openai/gpt-4o-mini',\n  generationTime: aiResponse.usage?.total_tokens || 0,\n  readyForCommit: true,\n  processingTime: new Date().toISOString()\n};\n\nreturn { json: commitData };"
+      },
+      "id": "process-ai-response",
+      "name": "Process AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "file",
+        "owner": "={{ $json.repoOwner }}",
+        "repository": "={{ $json.repositoryName }}",
+        "filePath": "={{ $json.filePath }}",
+        "fileContent": "={{ $json.generatedContent }}",
+        "commitMessage": "={{ $json.commitMessage }}",
+        "branch": "={{ $json.branchName }}"
+      },
+      "id": "github-create-branch",
+      "name": "GitHub - Create Branch & Commit",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [1340, 300],
+      "credentials": {
+        "githubApi": {
+          "id": "github-oauth",
+          "name": "GitHub OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "issue",
+        "owner": "={{ $json.repoOwner }}",
+        "repository": "={{ $json.repositoryName }}",
+        "title": "🚀 ShipIQ: Add {{ $json.fileName }} - DevOps Automation",
+        "body": "=## 🤖 Automated DevOps Enhancement\n\nThis PR was automatically generated by **ShipIQ DevOps Agent** to add missing DevOps infrastructure.\n\n### 📋 What's Added:\n- **File**: `{{ $json.fileName }}`\n- **Type**: {{ $json.fileType }}\n- **Language**: {{ $json.language }}\n- **Generated by**: {{ $json.modelUsed }}\n- **Content Length**: {{ $json.contentLength }} characters\n\n### 🔍 Preview:\n```\n{{ $json.generatedContent.substring(0, 500) }}{{ $json.generatedContent.length > 500 ? '...' : '' }}\n```\n\n### ✅ Ready for Review:\n- [ ] Review generated {{ $json.fileName }}\n- [ ] Test deployment pipeline\n- [ ] Verify functionality\n- [ ] Approve and merge\n\n---\n*Generated by ShipIQ DevOps Agent - Automated DevOps Enhancement Platform*",
+        "labels": "{{ $json.fileType }},devops,automated"
+      },
+      "id": "github-create-pr",
+      "name": "GitHub - Create Issue/PR",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [1560, 300],
+      "credentials": {
+        "githubApi": {
+          "id": "github-oauth",
+          "name": "GitHub OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "wait-for-actions",
+      "name": "Wait for GitHub Actions",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.repoOwner }}/{{ $json.repositoryName }}/actions/runs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.githubApi.accessToken }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "completed"
+            },
+            {
+              "name": "per_page",
+              "value": "5"
+            }
+          ]
+        }
+      },
+      "id": "github-check-actions",
+      "name": "HTTP - Check Actions Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 300],
+      "credentials": {
+        "githubApi": {
+          "id": "github-oauth",
+          "name": "GitHub OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze GitHub Actions results and determine next steps\nconst actionsData = $input.first().json;\nconst inputData = $('Extract & Prepare Data').first().json;\n\n// Get the most recent workflow run\nconst latestRun = actionsData.workflow_runs?.[0];\n\nif (!latestRun) {\n  return {\n    json: {\n      ...inputData,\n      status: 'no_runs_found',\n      needsRetry: false,\n      error: 'No workflow runs found',\n      action: 'wait_more',\n      lastChecked: new Date().toISOString()\n    }\n  };\n}\n\nconst status = latestRun.conclusion; // success, failure, cancelled, neutral\nconst runId = latestRun.id;\nconst runUrl = latestRun.html_url;\n\n// Determine action based on status\nlet needsRetry = false;\nlet action = 'success';\nlet error = null;\n\nif (status === 'failure') {\n  needsRetry = inputData.attemptNumber < inputData.maxAttempts;\n  action = needsRetry ? 'retry' : 'max_attempts_reached';\n  error = `Workflow run ${runId} failed`;\n} else if (status === 'success') {\n  action = 'success';\n} else if (status === 'cancelled') {\n  needsRetry = inputData.attemptNumber < inputData.maxAttempts;\n  action = needsRetry ? 'retry' : 'cancelled';\n  error = `Workflow run ${runId} was cancelled`;\n} else {\n  action = 'wait_more';\n  error = `Workflow run ${runId} status: ${status}`;\n}\n\nreturn {\n  json: {\n    ...inputData,\n    status,\n    runId,\n    runUrl,\n    needsRetry,\n    action,\n    error,\n    lastChecked: new Date().toISOString()\n  }\n};"
+      },
+      "id": "analyze-actions-status",
+      "name": "Analyze Actions Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "2",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "retry",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "3",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "wait_more",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "4",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "max_attempts_reached",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-by-status",
+      "name": "Route by Deployment Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.repoOwner }}/{{ $json.repositoryName }}/actions/runs/{{ $json.runId }}/logs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.githubApi.accessToken }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "followRedirect": true,
+          "timeout": 30000
+        }
+      },
+      "id": "github-get-logs",
+      "name": "HTTP - Get Workflow Logs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 320],
+      "credentials": {
+        "githubApi": {
+          "id": "github-oauth",
+          "name": "GitHub OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENROUTER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "openai/gpt-4o-mini"
+            },
+            {
+              "name": "messages",
+              "value": "=[\n  {\n    \"role\": \"system\",\n    \"content\": \"You are a DevOps expert specializing in deployment troubleshooting and error analysis. Analyze failed deployments and provide improved versions with better error handling. Always respond with ONLY the improved file content, no explanations or markdown formatting.\"\n  },\n  {\n    \"role\": \"user\",\n    \"content\": \"Analyze this failed GitHub Actions deployment and provide an improved version:\\n\\n**Failed Deployment Details:**\\n- Repository: {{ $json.repositoryName }}\\n- File Type: {{ $json.fileType }}\\n- Language: {{ $json.language }}\\n- Run ID: {{ $json.runId }}\\n- Error: {{ $json.error }}\\n- Attempt Number: {{ $json.attemptNumber }}\\n- Previous Content: {{ $json.generatedContent.slice(0, 1000) }}\\n- Recent Logs: {{ $json.data && $json.data[0] ? $json.data[0].name : 'no_logs_available' }}\\n\\n**Common Issues to Address:**\\n1. Docker build failures (base image, dependencies, permissions)\\n2. Missing environment variables or secrets\\n3. Port conflicts or network issues\\n4. Test failures or linting errors\\n5. Resource constraints (memory, CPU)\\n6. Permission issues or authentication problems\\n7. Path or file structure problems\\n8. Version compatibility issues\\n\\n**Requirements:**\\n1. Analyze the likely cause of failure based on file type and error\\n2. Generate an improved version with:\\n   - Better error handling\\n   - Retry logic for network operations\\n   - Proper resource management\\n   - Enhanced logging and debugging\\n   - Fallback mechanisms\\n   - Health checks\\n3. Include troubleshooting comments\\n4. Optimize for the specific failure scenario\\n\\nGenerate ONLY the improved {{ $json.fileName }} content:\"\n  }\n]"
+            },
+            {
+              "name": "temperature",
+              "value": 0.1
+            },
+            {
+              "name": "max_tokens",
+              "value": 3500
+            }
+          ]
+        },
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "ai-fix-deployment",
+      "name": "AI - Fix Deployment Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare retry attempt with improved content\nconst aiFixResponse = $input.first().json;\nconst originalData = $('Extract & Prepare Data').first().json;\n\n// Extract improved content from OpenRouter response\nlet improvedContent = '';\nif (aiFixResponse.choices && aiFixResponse.choices[0] && aiFixResponse.choices[0].message) {\n  improvedContent = aiFixResponse.choices[0].message.content;\n} else if (aiFixResponse.error) {\n  throw new Error(`OpenRouter API error: ${aiFixResponse.error.message}`);\n} else {\n  throw new Error('Unexpected OpenRouter response format for retry');\n}\n\n// Clean up the content\nif (improvedContent.includes('```')) {\n  const lines = improvedContent.split('\\n');\n  const startIndex = lines.findIndex(line => line.trim().startsWith('```'));\n  const endIndex = lines.findIndex((line, index) => index > startIndex && line.trim().endsWith('```'));\n  if (startIndex !== -1 && endIndex !== -1) {\n    improvedContent = lines.slice(startIndex + 1, endIndex).join('\\n');\n  }\n}\n\nconst newAttemptNumber = originalData.attemptNumber + 1;\nconst newBranchName = `shipiq-devops-${originalData.fileType}-${originalData.timestamp}-retry-${newAttemptNumber}`;\nconst newCommitMessage = `fix: Improve ${originalData.fileName} - Attempt ${newAttemptNumber} (ShipIQ)`;\n\nreturn {\n  json: {\n    ...originalData,\n    generatedContent: improvedContent.trim(),\n    attemptNumber: newAttemptNumber,\n    branchName: newBranchName,\n    commitMessage: newCommitMessage,\n    isRetry: true,\n    previousAttempt: originalData.attemptNumber,\n    improvementReason: 'AI-generated improvements based on failure analysis',\n    readyForCommit: true,\n    retryTime: new Date().toISOString()\n  }\n};"
+      },
+      "id": "prepare-retry",
+      "name": "Prepare Retry Attempt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 400]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(300, 30 * Math.pow(2, $json.attemptNumber - 1)) }}",
+        "unit": "seconds"
+      },
+      "id": "wait-before-retry",
+      "name": "Wait Before Retry (Backoff)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [3320, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"action\": \"{{ $json.action }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"repository\": {\n    \"owner\": \"{{ $json.repoOwner }}\",\n    \"name\": \"{{ $json.repositoryName }}\",\n    \"url\": \"{{ $json.repoUrl }}\"\n  },\n  \"file\": {\n    \"type\": \"{{ $json.fileType }}\",\n    \"name\": \"{{ $json.fileName }}\",\n    \"path\": \"{{ $json.filePath }}\",\n    \"size\": {{ $json.contentLength }}\n  },\n  \"deployment\": {\n    \"status\": \"{{ $json.status }}\",\n    \"runId\": \"{{ $json.runId }}\",\n    \"runUrl\": \"{{ $json.runUrl }}\",\n    \"attempt\": {{ $json.attemptNumber }},\n    \"maxAttempts\": {{ $json.maxAttempts }}\n  },\n  \"timestamp\": \"{{ $json.lastChecked }}\",\n  \"message\": \"Deployment {{ $json.status === 'success' ? 'completed successfully' : $json.status === 'failure' ? 'failed - check run for details' : 'in progress' }}\"\n}"
+      },
+      "id": "respond-success",
+      "name": "Respond - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"action\": \"{{ $json.action }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"repository\": {\n    \"owner\": \"{{ $json.repoOwner }}\",\n    \"name\": \"{{ $json.repositoryName }}\",\n    \"url\": \"{{ $json.repoUrl }}\"\n  },\n  \"error\": {\n    \"message\": \"{{ $json.error }}\",\n    \"runId\": \"{{ $json.runId }}\",\n    \"runUrl\": \"{{ $json.runUrl }}\",\n    \"attempts\": {{ $json.attemptNumber }},\n    \"maxAttempts\": {{ $json.maxAttempts }}\n  },\n  \"timestamp\": \"{{ $json.lastChecked }}\",\n  \"message\": \"Deployment failed after {{ $json.attemptNumber }} attempts. Manual intervention required.\"\n}"
+      },
+      "id": "respond-failure",
+      "name": "Respond - Max Attempts Reached",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2660, 600]
+    },
+    {
+      "parameters": {
+        "fromEmail": "zen.machina78@gmail.com",
+        "toEmail": "zen.machina78@gmail.com",
+        "subject": "={{ $json.status === 'success' ? `✅ [ShipIQ] Deployment Success - ${$json.repositoryName}` : $json.action === 'retry' ? `🔄 [ShipIQ] Retrying Deployment - ${$json.repositoryName} (Attempt ${$json.attemptNumber})` : `❌ [ShipIQ] Deployment Issue - ${$json.repositoryName}` }}",
+        "text": "=Repository: {{ $json.repositoryName }}\nBranch: {{ $json.branchName }}\nFile: {{ $json.fileName }}\nStatus: {{ $json.status }}\nAction: {{ $json.action }}\nAttempt: {{ $json.attemptNumber }}/{{ $json.maxAttempts }}\nRun: {{ $json.runUrl || 'n/a' }}\nPR: {{ $json.prUrl || 'n/a' }}\nMessage: {{ $json.error || 'none' }}\nTimestamp: {{ $json.lastChecked || new Date().toISOString() }}"
+      },
+      "id": "email-notify",
+      "name": "Email - Notify",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [2800, 200],
+      "credentials": {
+        "smtp": {
+          "id": "gmail-service-smtp",
+          "name": "Gmail Service SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Repo Data": {
+      "main": [
+        [
+          {
+            "node": "Extract & Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Route by File Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by File Type": {
+      "main": [
+        [
+          {
+            "node": "Generate Dockerfile (OpenRouter)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate CI/CD (OpenRouter)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate README (OpenRouter)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Dockerfile (OpenRouter)": {
+      "main": [
+        [
+          {
+            "node": "Process AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate CI/CD (OpenRouter)": {
+      "main": [
+        [
+          {
+            "node": "Process AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate README (OpenRouter)": {
+      "main": [
+        [
+          {
+            "node": "Process AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process AI Response": {
+      "main": [
+        [
+          {
+            "node": "GitHub - Create Branch & Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub - Create Branch & Commit": {
+      "main": [
+        [
+          {
+            "node": "GitHub - Create Issue/PR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub - Create Issue/PR": {
+      "main": [
+        [
+          {
+            "node": "Wait for GitHub Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for GitHub Actions": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Check Actions Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Check Actions Status": {
+      "main": [
+        [
+          {
+            "node": "Analyze Actions Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Actions Status": {
+      "main": [
+        [
+          {
+            "node": "Route by Deployment Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Deployment Status": {
+      "main": [
+        [
+          {
+            "node": "Respond - Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Get Workflow Logs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for GitHub Actions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Max Attempts Reached",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Get Workflow Logs": {
+      "main": [
+        [
+          {
+            "node": "AI - Fix Deployment Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI - Fix Deployment Issues": {
+      "main": [
+        [
+          {
+            "node": "Prepare Retry Attempt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Retry Attempt": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Retry (Backoff)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Retry (Backoff)": {
+      "main": [
+        [
+          {
+            "node": "Process AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond - Success": {
+      "main": [
+        [
+          {
+            "node": "Email - Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond - Max Attempts Reached": {
+      "main": [
+        [
+          {
+            "node": "Email - Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "1",
+      "name": "DevOps"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "2",
+      "name": "GitHub"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "3",
+      "name": "Auto-Retry"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

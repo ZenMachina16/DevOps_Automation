@@ -2,25 +2,23 @@ import axios from 'axios';
 import { parseGitHubUrl } from './repoScanner.js';
 
 /**
- * Service to interact with Langflow agent
+ * Service to interact with n8n DevOps agent
  */
-export class LangflowClient {
+export class N8nClient {
   constructor() {
-    this.baseUrl = process.env.LANGFLOW_API_URL;
-    this.apiKey = process.env.LANGFLOW_API_KEY;
-    this.flowId = process.env.LANGFLOW_FLOW_ID;
+    this.webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/shipiq-agent-full';
   }
 
   /**
-   * Send data to Langflow agent for file generation
+   * Send data to n8n agent for file generation
    * @param {string} repoUrl - GitHub repository URL
    * @param {Object} gapReport - Gap analysis report
    * @param {Object} metadata - Repository metadata (package.json, etc.)
    * @returns {Promise<Object>} Generated file content
    */
   async generateFiles(repoUrl, gapReport, metadata = null) {
-    if (!this.baseUrl || !this.flowId) {
-      throw new Error('Langflow configuration missing. Please set LANGFLOW_API_URL and LANGFLOW_FLOW_ID');
+    if (!this.webhookUrl) {
+      throw new Error('n8n configuration missing. Please set N8N_WEBHOOK_URL');
     }
 
     const parsed = parseGitHubUrl(repoUrl);
@@ -39,8 +37,8 @@ export class LangflowClient {
       return { message: 'No missing files detected. Repository is complete!' };
     }
 
-    // Prepare input for Langflow agent
-    const langflowInput = {
+    // Prepare input for n8n agent
+    const n8nInput = {
       input_value: JSON.stringify({
         language: this.detectLanguage(metadata),
         manifest_filename: "package.json",
@@ -55,75 +53,57 @@ export class LangflowClient {
           name: parsed.repo,
           url: repoUrl
         }
-      }),
-      sender: 'ShipIQ',
-      session_id: `shipiq_${Date.now()}_${parsed.owner}_${parsed.repo}`
+      })
     };
 
     try {
-      const endpoint = `${this.baseUrl}/api/v1/run/${this.flowId}`;
-      console.log('Calling Langflow endpoint:', endpoint);
-      console.log('Input data:', JSON.stringify(langflowInput, null, 2));
+      console.log('Calling n8n webhook:', this.webhookUrl);
+      console.log('Input data:', JSON.stringify(n8nInput, null, 2));
 
-      const response = await axios.post(endpoint, langflowInput, {
+      const response = await axios.post(this.webhookUrl, n8nInput, {
         headers: {
-          'Content-Type': 'application/json',
-          ...(this.apiKey && { 'x-api-key': this.apiKey })
+          'Content-Type': 'application/json'
         },
         timeout: 60000 // 60 second timeout for LLM processing
       });
 
-      console.log('Langflow response:', response.data);
-      return this.processLangflowResponse(response.data, missingItems[0]);
+      console.log('n8n response:', response.data);
+      return this.processN8nResponse(response.data);
     } catch (error) {
-      console.error('Langflow API error:', error.response?.data || error.message);
+      console.error('n8n API error:', error.response?.data || error.message);
       throw new Error(`File generation failed: ${error.response?.data?.message || error.message}`);
     }
   }
 
   /**
-   * Process Langflow response and extract generated content
-   * @param {Object} response - Langflow API response
-   * @param {string} firstMissingItem - The first missing item being generated
+   * Process n8n response and extract generated content
+   * @param {Object} response - n8n webhook response
    * @returns {Object} Processed response with generated content
    */
-  processLangflowResponse(response, firstMissingItem) {
-    // Langflow response structure can vary, handle different formats
-    let generatedContent = '';
-    let fileType = 'unknown';
-
-    // Determine file type from first missing item
-    if (firstMissingItem === 'missing_dockerfile') {
-      fileType = 'Dockerfile';
-    } else if (firstMissingItem === 'missing_ci_cd_workflow') {
-      fileType = 'GitHub Actions Workflow';
-    } else if (firstMissingItem === 'missing_README_documentation') {
-      fileType = 'README.md';
-    }
-
-    // Extract content from various possible response structures
-    if (response.outputs && Array.isArray(response.outputs) && response.outputs.length > 0) {
-      const output = response.outputs[0];
-      generatedContent = output.outputs?.[0]?.outputs?.[0]?.messages?.[0]?.message || 
-                       output.outputs?.[0]?.outputs?.[0]?.results?.message?.text ||
-                       output.text || 
-                       output.message || 
-                       JSON.stringify(output);
-    } else if (response.result) {
-      generatedContent = response.result.text || response.result.message || JSON.stringify(response.result);
-    } else if (response.message) {
-      generatedContent = response.message;
+  processN8nResponse(response) {
+    // n8n returns the structured response directly
+    if (response.success && response.generatedFiles) {
+      return {
+        success: true,
+        generatedFiles: {
+          content: response.generatedFiles.content,
+          fileType: response.generatedFiles.fileType,
+          timestamp: response.generatedFiles.timestamp
+        }
+      };
+    } else if (response.success === false) {
+      throw new Error(response.error || 'File generation failed');
     } else {
-      generatedContent = JSON.stringify(response);
+      // Fallback for unexpected response format
+      return {
+        success: true,
+        generatedFiles: {
+          content: JSON.stringify(response, null, 2),
+          fileType: 'Unknown',
+          timestamp: new Date().toISOString()
+        }
+      };
     }
-
-    return {
-      success: true,
-      fileType,
-      content: generatedContent,
-      timestamp: new Date().toISOString(),
-      rawResponse: response
-    };
   }
 
   /**
@@ -151,5 +131,5 @@ export class LangflowClient {
 }
 
 // Export singleton instance
-export const langflowClient = new LangflowClient();
-export default langflowClient;
+export const n8nClient = new N8nClient();
+export default n8nClient;
