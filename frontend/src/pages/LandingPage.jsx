@@ -105,7 +105,7 @@ export default function LandingPage() {
                 FAQ
               </a>
               <a 
-                href="http://localhost:5000/auth/github"
+                // href="http://localhost:5000/auth/github"
                 className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 hover:scale-105 transition-all duration-200 shadow-lg"
               >
                 Connect GitHub

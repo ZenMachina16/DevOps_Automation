@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
 import BaseLayout from "./components/layout/BaseLayout";
-import LandingPage from "./pages/LandingPage.jsx";
+import LandingPage from "./pages/Landing/LandingPage.jsx"; // updated import
 import Scan from "./pages/Scan.jsx";
 import api from "./api/axios.js";
 
