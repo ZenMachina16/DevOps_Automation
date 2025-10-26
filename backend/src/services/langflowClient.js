@@ -1,12 +1,16 @@
 import axios from 'axios';
 import { parseGitHubUrl } from './repoScanner.js';
 
+import dotenv from 'dotenv'; 
+dotenv.config();
+
+
 /**
  * Service to interact with n8n DevOps agent
  */
 export class N8nClient {
   constructor() {
-    this.webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/shipiq-agent-full';
+    this.webhookUrl = process.env.N8N_WEBHOOK_URL ;
   }
 
   /**

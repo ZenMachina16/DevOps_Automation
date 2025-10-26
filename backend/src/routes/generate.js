@@ -65,7 +65,7 @@ router.post('/generate-files', async (req, res) => {
  */
 router.get('/generate-status', async (req, res) => {
   try {
-    const webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/shipiq-agent-full';
+    const webhookUrl = process.env.N8N_WEBHOOK_URL ;
     const isConfigured = !!webhookUrl;
 
     return res.json({

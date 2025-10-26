@@ -11,6 +11,8 @@ import generateRouter from './src/routes/generate.js';
 import githubWebhookRouter from './src/routes/githubWebhook.js';
 
 dotenv.config();
+console.log('Loaded N8N_WEBHOOK_URL:', process.env.N8N_WEBHOOK_URL);
+
 
 const app = express();
 

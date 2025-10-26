@@ -106,7 +106,7 @@ async function handleDeploymentStatus(deploymentData) {
  */
 async function triggerRetryWorkflow(repository, workflow_run) {
   try {
-    const n8nWebhookUrl = process.env.N8N_RETRY_WEBHOOK_URL || 'http://localhost:5678/webhook/shipiq-retry';
+    const n8nWebhookUrl = process.env.N8N_RETRY_WEBHOOK_URL ;
     
     const retryPayload = {
       repository: {
@@ -166,7 +166,7 @@ router.get('/webhook/status', (req, res) => {
       'deployment_status',
       'deployment'
     ],
-    retryWebhookUrl: process.env.N8N_RETRY_WEBHOOK_URL || 'http://localhost:5678/webhook/shipiq-retry',
+    retryWebhookUrl: process.env.N8N_RETRY_WEBHOOK_URL ,
     timestamp: new Date().toISOString()
   });
 });

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guide to DevOps</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F5F5F4;
+            color: #292524;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 50vh;
+            max-height: 450px;
+        }
+        .lifecycle-stage {
+            transition: all 0.3s ease;
+        }
+        .lifecycle-stage.active {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            background-color: #3B82F6;
+            color: white;
+            border-color: #2563EB;
+        }
+        .lifecycle-stage.active .stage-icon {
+            filter: brightness(0) invert(1);
+        }
+        .nav-link {
+            transition: color 0.3s ease, border-color 0.3s ease;
+        }
+        .nav-link.active {
+            color: #3B82F6;
+            border-bottom-color: #3B82F6;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <!-- Chosen Palette: Warm Neutrals (Tailwind Stone & Blue) -->
+    <!-- Application Structure Plan: The SPA is designed as a single-page, vertical narrative to guide beginners through the concept of DevOps. Instead of a linear slide format, the structure uses thematic sections that can be scrolled or jumped to via a sticky navigation bar. This facilitates both linear consumption and random-access exploration. Key interactions include: 1) A clickable DevOps lifecycle diagram to explore each stage individually, making the core process tangible. 2) A dynamic radar chart visualizing the business benefits, providing a quantitative feel to conceptual gains. 3) Content sections with clear headers and introductory text. This structure was chosen to transform a static presentation into an engaging educational tool, where users can actively explore concepts rather than passively view them. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: DevOps Definition -> Goal: Inform -> Method: Introductory text -> Interaction: Static -> Justification: Clear, concise foundation for the user.
+        - Report Info: DevOps Lifecycle (Plan, Code, etc.) -> Goal: Organize/Explore -> Method: Interactive diagram using HTML/CSS/JS -> Interaction: Click to reveal details for each stage -> Justification: Makes the abstract process interactive and easier to understand than a static graphic.
+        - Report Info: Importance of DevOps (Speed, Reliability, etc.) -> Goal: Inform -> Method: Grid of feature cards -> Interaction: Static with hover effects -> Justification: Breaks down key selling points into digestible chunks.
+        - Report Info: Business Benefits -> Goal: Compare/Inform -> Method: Radar Chart (Chart.js) -> Interaction: Hover for tooltips -> Justification: Provides a compelling visual summary of the impact of DevOps, quantifying abstract benefits like "efficiency" and "quality".
+        - Report Info: Key Practices -> Goal: Inform -> Method: List with icons -> Interaction: Static -> Justification: Clearly presents the core activities associated with DevOps.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <div id="app" class="container mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <header class="text-center py-16 md:py-24">
+            <h1 class="text-4xl md:text-6xl font-bold tracking-tight text-stone-800">What is DevOps?</h1>
+            <p class="mt-4 text-lg md:text-xl text-stone-600 max-w-3xl mx-auto">An interactive guide to bridging the gap between Development and Operations.</p>
+        </header>
+
+        <nav class="sticky top-0 z-10 bg-stone-100/80 backdrop-blur-md mb-12 rounded-lg shadow-sm">
+            <div class="flex justify-center items-center space-x-4 sm:space-x-8 py-3 border-b border-stone-200">
+                <a href="#definition" class="nav-link text-sm sm:text-base font-medium text-stone-600 hover:text-blue-500 py-2 border-b-2 border-transparent">Definition</a>
+                <a href="#lifecycle" class="nav-link text-sm sm:text-base font-medium text-stone-600 hover:text-blue-500 py-2 border-b-2 border-transparent">Lifecycle</a>
+                <a href="#impact" class="nav-link text-sm sm:text-base font-medium text-stone-600 hover:text-blue-500 py-2 border-b-2 border-transparent">Impact</a>
+                <a href="#practices" class="nav-link text-sm sm:text-base font-medium text-stone-600 hover:text-blue-500 py-2 border-b-2 border-transparent">Practices</a>
+            </div>
+        </nav>
+
+        <main class="space-y-20 md:space-y-28">
+
+            <section id="definition" class="scroll-mt-24">
+                <div class="text-center max-w-4xl mx-auto">
+                    <h2 class="text-3xl font-bold text-stone-800">Explained Simply</h2>
+                    <p class="mt-4 text-lg text-stone-600">This section introduces the core concept of DevOps. It's not just about tools; it's a cultural shift that combines practices and philosophies to improve collaboration between software development (Dev) and IT operations (Ops) teams.</p>
+                </div>
+                <div class="mt-10 bg-white p-8 rounded-xl shadow-lg border border-stone-200">
+                    <p class="text-lg text-stone-700 leading-relaxed">DevOps is a culture of collaboration and a set of practices that bring software development (Dev) and IT operations (Ops) teams together. The primary goal is to shorten the systems development life cycle and provide continuous delivery with high software quality. It's about removing the barriers between these traditionally siloed teams to build, test, and release software faster and more reliably.</p>
+                    <blockquote class="mt-6 border-l-4 border-blue-500 pl-4 italic text-blue-800 bg-blue-50 p-4 rounded-r-lg">
+                        <strong>In one sentence:</strong> DevOps automates and integrates the processes between software development and IT teams, so they can build, test, and release software faster and more reliably.
+                    </blockquote>
+                </div>
+            </section>
+            
+            <section id="lifecycle" class="scroll-mt-24">
+                <div class="text-center max-w-4xl mx-auto">
+                    <h2 class="text-3xl font-bold text-stone-800">The Infinite Lifecycle</h2>
+                    <p class="mt-4 text-lg text-stone-600">The DevOps process is often visualized as an infinite loop. This represents the continuous and collaborative nature of software development and delivery. Interact with each stage below to learn about its role in the cycle.</p>
+                </div>
+                <div class="mt-12">
+                    <div id="lifecycle-diagram" class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                    </div>
+                </div>
+                 <div class="mt-8 bg-white p-6 rounded-xl shadow-lg border border-stone-200 min-h-[150px] flex items-center justify-center">
+                    <div id="lifecycle-details" class="text-center">
+                        <p class="text-stone-500">Click on a stage above to see its description.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="impact" class="scroll-mt-24">
+                <div class="text-center max-w-4xl mx-auto">
+                    <h2 class="text-3xl font-bold text-stone-800">Why It Matters: The Impact of DevOps</h2>
+                    <p class="mt-4 text-lg text-stone-600">Adopting DevOps isn't just a technical decision; it delivers significant business value. This section explores the core reasons why DevOps is crucial in modern software development and visualizes its benefits through a performance impact chart.</p>
+                </div>
+
+                <div class="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 text-center">
+                        <div class="text-4xl mb-3">🚀</div>
+                        <h3 class="text-xl font-semibold text-stone-800">Increasing Speed</h3>
+                        <p class="mt-2 text-stone-600">Go from idea to deployment faster than ever by automating and streamlining the release process.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 text-center">
+                        <div class="text-4xl mb-3">🛡️</div>
+                        <h3 class="text-xl font-semibold text-stone-800">Improving Reliability</h3>
+                        <p class="mt-2 text-stone-600">Build more stable and secure applications with integrated testing and continuous monitoring.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 text-center">
+                        <div class="text-4xl mb-3">🤝</div>
+                        <h3 class="text-xl font-semibold text-stone-800">Enhancing Collaboration</h3>
+                        <p class="mt-2 text-stone-600">Break down silos and create more effective, communicative, and unified teams.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 text-center">
+                        <div class="text-4xl mb-3">💡</div>
+                        <h3 class="text-xl font-semibold text-stone-800">Driving Innovation</h3>
+                        <p class="mt-2 text-stone-600">Free up teams to focus on creating customer value instead of managing infrastructure and fixing issues.</p>
+                    </div>
+                </div>
+
+                <div class="mt-16 bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-stone-200">
+                    <h3 class="text-2xl font-bold text-stone-800 text-center">Business Benefits Visualized</h3>
+                    <p class="text-center text-stone-600 mt-2 mb-8">This chart shows the typical performance improvements seen after adopting DevOps practices. Hover over the points to see the impact.</p>
+                    <div class="chart-container">
+                        <canvas id="benefitsChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section id="practices" class="scroll-mt-24">
+                <div class="text-center max-w-4xl mx-auto">
+                    <h2 class="text-3xl font-bold text-stone-800">Key Practices in Action</h2>
+                    <p class="mt-4 text-lg text-stone-600">DevOps culture is supported by a set of core technical practices. These practices are the building blocks that enable teams to deliver software with speed and quality. This section highlights the most critical ones.</p>
+                </div>
+                <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 flex items-start space-x-4">
+                        <div class="text-3xl pt-1">🔄</div>
+                        <div>
+                            <h3 class="font-semibold text-lg text-stone-800">CI/CD</h3>
+                            <p class="text-stone-600 mt-1">Continuous Integration & Continuous Delivery/Deployment automates the software release process. Code changes are automatically built, tested, and prepared for a release.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 flex items-start space-x-4">
+                        <div class="text-3xl pt-1">🤖</div>
+                        <div>
+                            <h3 class="font-semibold text-lg text-stone-800">Automation</h3>
+                            <p class="text-stone-600 mt-1">Automate everything from testing and infrastructure setup (Infrastructure as Code) to deployment, reducing manual effort and human error.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 flex items-start space-x-4">
+                        <div class="text-3xl pt-1">📈</div>
+                        <div>
+                            <h3 class="font-semibold text-lg text-stone-800">Monitoring & Feedback</h3>
+                            <p class="text-stone-600 mt-1">Continuously monitor application performance and infrastructure to identify issues proactively and gather feedback for future improvements.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 flex items-start space-x-4">
+                        <div class="text-3xl pt-1">✅</div>
+                        <div>
+                            <h3 class="font-semibold text-lg text-stone-800">Testing</h3>
+                            <p class="text-stone-600 mt-1">Integrate automated and continuous testing throughout the entire development lifecycle to catch bugs early and ensure quality.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="conclusion" class="text-center py-16">
+                 <h2 class="text-3xl font-bold text-stone-800">Start Your DevOps Journey</h2>
+                 <p class="mt-4 text-lg text-stone-600 max-w-3xl mx-auto">DevOps isn't just a trend—it's the modern standard for building and delivering software. By focusing on culture, automation, and collaboration, your teams can create better products for your users, faster.</p>
+                 <button class="mt-8 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors">Implement DevOps Practices Today!</button>
+            </section>
+
+        </main>
+
+        <footer class="text-center py-8 border-t border-stone-200 mt-16">
+            <p class="text-stone-500">Interactive DevOps Guide | Built with modern web technologies.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const lifecycleData = {
+                plan: { title: 'Plan', icon: '📝', description: 'Define features and requirements. This stage involves planning the upcoming work, creating user stories, and managing the product backlog.' },
+                code: { title: 'Code', icon: '💻', description: 'Software development and source code management. Developers write code and commit it to a shared repository like Git.' },
+                build: { title: 'Build', icon: '🏗️', description: 'Compile the code into a build or artifact. Continuous Integration tools automate this process whenever new code is committed.' },
+                test: { title: 'Test', icon: '🧪', description: 'Perform automated tests to ensure quality. This includes unit tests, integration tests, and security scans to catch bugs early.' },
+                release: { title: 'Release', icon: '🚀', description: 'Automate the release and deployment of the application. This stage prepares the build for deployment to production environments.' },
+                deploy: { title: 'Deploy', icon: '📦', description: 'Push the release into the production environment. This is often done using Infrastructure as Code for consistency and reliability.' },
+                operate: { title: 'Operate', icon: '⚙️', description: 'Manage and maintain the application in production. This includes infrastructure management, scaling, and ensuring high availability.' },
+                monitor: { title: 'Monitor', icon: '📊', description: 'Collect data and feedback on application performance. Monitoring tools track performance, errors, and user behavior to inform the next planning phase.' },
+            };
+
+            const lifecycleDiagram = document.getElementById('lifecycle-diagram');
+            const lifecycleDetails = document.getElementById('lifecycle-details');
+            let activeStage = null;
+
+            Object.keys(lifecycleData).forEach(key => {
+                const stage = lifecycleData[key];
+                const stageEl = document.createElement('button');
+                stageEl.className = 'lifecycle-stage text-center p-4 rounded-lg border-2 border-stone-300 bg-stone-50 hover:bg-stone-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2';
+                stageEl.dataset.stage = key;
+                stageEl.innerHTML = `
+                    <div class="stage-icon text-4xl mb-2">${stage.icon}</div>
+                    <span class="font-semibold text-sm md:text-base">${stage.title}</span>
+                `;
+                stageEl.addEventListener('click', () => {
+                    if (activeStage) {
+                        activeStage.classList.remove('active');
+                    }
+                    stageEl.classList.add('active');
+                    activeStage = stageEl;
+                    
+                    lifecycleDetails.innerHTML = `
+                        <h3 class="font-bold text-xl text-stone-800">${stage.title}</h3>
+                        <p class="mt-2 text-stone-600 max-w-2xl mx-auto">${stage.description}</p>
+                    `;
+                });
+                lifecycleDiagram.appendChild(stageEl);
+            });
+
+            const benefitsCtx = document.getElementById('benefitsChart').getContext('2d');
+            const benefitsChart = new Chart(benefitsCtx, {
+                type: 'radar',
+                data: {
+                    labels: ['Faster Time-to-Market', 'Higher Quality', 'Better Collaboration', 'Increased Efficiency', 'Improved Security'],
+                    datasets: [{
+                        label: 'Impact of DevOps',
+                        data: [85, 90, 95, 80, 75],
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 13,
+                                    weight: '500'
+                                },
+                                color: '#44403c'
+                            },
+                            ticks: {
+                                backdropColor: 'rgba(245, 245, 244, 0.75)',
+                                color: '#78716c',
+                                stepSize: 20
+                            },
+                            min: 0,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.r !== null) {
+                                        label += context.parsed.r + '% Improvement';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const navLinks = document.querySelectorAll('.nav-link');
+            const sections = document.querySelectorAll('section[id]');
+            
+            function updateActiveLink() {
+                let currentSectionId = '';
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    if (pageYOffset >= sectionTop - 120) {
+                        currentSectionId = section.getAttribute('id');
+                    }
+                });
+
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('href') === `#${currentSectionId}`) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+            
+            window.addEventListener('scroll', updateActiveLink);
+            updateActiveLink();
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+
+        });
+    </script>
+</body>
+</html>
