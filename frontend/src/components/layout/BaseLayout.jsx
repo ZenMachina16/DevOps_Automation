@@ -46,12 +46,13 @@ export default function BaseLayout({ children }) {
           ))}
 
           <a
-            href="/auth/github"
-            className="inline-flex items-center px-5 py-2 bg-green-600/80 hover:bg-green-500/80 text-white font-semibold rounded-lg shadow-lg transition-transform transform hover:scale-105 backdrop-blur-sm"
-          >
-            <img src="/github-icon.svg" alt="GitHub" className="w-5 h-5 mr-2" />
-            Connect GitHub
-          </a>
+  href="http://localhost:5000/auth/github"
+  className="inline-flex items-center px-5 py-2 bg-green-600/80 hover:bg-green-500/80 text-white font-semibold rounded-lg shadow-lg transition-transform transform hover:scale-105 backdrop-blur-sm"
+>
+  <img src="/github-icon.svg" alt="GitHub" className="w-5 h-5 mr-2" />
+  Connect GitHub
+</a>
+
         </div>
       </header>
 

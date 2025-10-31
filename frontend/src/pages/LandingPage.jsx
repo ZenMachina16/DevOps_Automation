@@ -104,12 +104,16 @@ export default function LandingPage() {
               <a href="#faq" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors">
                 FAQ
               </a>
-              <a 
-                // href="http://localhost:5000/auth/github"
-                className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 hover:scale-105 transition-all duration-200 shadow-lg"
-              >
-                Connect GitHub
-              </a>
+             <button
+  onClick={() => {
+    console.log("🔗 Redirecting manually to GitHub OAuth...");
+    window.location.href = "http://localhost:5000/auth/github";
+  }}
+  className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 hover:scale-105 transition-all duration-200 shadow-lg"
+>
+  Connect GitHub
+</button>
+
             </div>
           </div>
         </div>
