@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   🎨 THEME — Cube colors + borders
-   ========================================================= */
+  🎨 THEME — Cube colors + borders
+  ========================================================= */
 const THEME = {
   front: "linear-gradient(180deg, #41995dff, #080c14)",
   top: "linear-gradient(180deg, rgba(71,163,225,1), rgba(100,120,150,0.1))",
@@ -33,11 +33,12 @@ const THEME = {
 const FACE_FLIP = false;
 
 /* =========================================================
-   🧊 Cube Component
-   ========================================================= */
+  🧊 Cube Component
+  ========================================================= */
 const Cube = ({ icon: Icon, label, variants }) => {
   const cubeDepth = 50;
-  const tilt = { rx: 30, ry: -12, rz: 3 };
+  const cubeRadius = 5;
+  const tilt = { rx: 30, ry: -12, rz: 3 }; // Kept here for face logic
 
   const rightIsVisibleBySign = tilt.ry > 0;
   const rightIsVisible = FACE_FLIP
@@ -47,7 +48,6 @@ const Cube = ({ icon: Icon, label, variants }) => {
   const rightBg = rightIsVisible ? THEME.rightBright : THEME.rightDark;
   const leftBg = rightIsVisible ? THEME.leftDark : THEME.leftBright;
 
-  // Right Face Styling
   const rightFaceStyle = {
     width: `${cubeDepth}px`,
     transform: `rotateY(90deg) translateZ(${cubeDepth / 2}px)`,
@@ -62,10 +62,9 @@ const Cube = ({ icon: Icon, label, variants }) => {
     zIndex: 6,
     position: "absolute",
     right: 0,
-    borderRadius: "0.5rem",
+    borderRadius: `${cubeRadius}px`,
   };
 
-  // Left Face Styling
   const leftFaceStyle = {
     width: `${cubeDepth}px`,
     transform: `rotateY(-90deg) translateZ(${cubeDepth / 2}px)`,
@@ -80,7 +79,7 @@ const Cube = ({ icon: Icon, label, variants }) => {
     zIndex: 6,
     position: "absolute",
     left: 0,
-    borderRadius: "0.5rem",
+    borderRadius: `${cubeRadius}px`,
   };
 
   const visibleRim = {
@@ -105,11 +104,7 @@ const Cube = ({ icon: Icon, label, variants }) => {
         translateY: "-55px",
       }}
       variants={variants}
-      whileHover={{
-        rotateX: tilt.rx + 5,
-        rotateY: tilt.ry - 5,
-        translateZ: 15,
-      }}
+      // Removed whileHover from here - it's now on the parent
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       {/* Shadow below cube */}
@@ -129,18 +124,19 @@ const Cube = ({ icon: Icon, label, variants }) => {
         }}
       />
 
-      {/* ✅ FRONT (fixed + subtle rim) */}
+      {/* FRONT */}
       <div
-        className="absolute w-full h-full flex flex-col items-center justify-center rounded-xl p-4 md:p-6 overflow-hidden"
+        className="absolute w-full h-full flex flex-col items-center justify-center overflow-hidden"
         style={{
           transform: `translateZ(${cubeDepth / 2}px)`,
           background: THEME.front,
           border: `1px solid ${THEME.border}`,
+          borderRadius: `${cubeRadius}px`,
           boxShadow: "0 6px 18px rgba(2,6,23,0.6)",
           zIndex: 10,
+          padding: "1.5rem",
         }}
       >
-        {/* Light reflection overlay */}
         <div
           style={{
             position: "absolute",
@@ -162,33 +158,35 @@ const Cube = ({ icon: Icon, label, variants }) => {
 
       {/* TOP */}
       <div
-        className="absolute w-full rounded-t-xl"
+        className="absolute w-full"
         style={{
           height: `${cubeDepth}px`,
-          transform: `rotateX(-90deg) translateZ(${cubeDepth / 2}px)`,
+          transform: `rotateX(-90deg) translateZ(${cubeDepth / 2 - 50}px)`,
           background: THEME.top,
           borderTop: `1px solid ${THEME.border}`,
+          borderRadius: `${cubeRadius}px`,
         }}
       />
 
       {/* RIGHT */}
-      <div className="absolute h-full rounded-r-xl" style={rightFaceStyle}>
+      <div className="absolute h-full" style={rightFaceStyle}>
         {rightIsVisible && <div style={{ ...visibleRim }} />}
       </div>
 
       {/* LEFT */}
-      <div className="absolute h-full rounded-l-xl" style={leftFaceStyle}>
+      <div className="absolute h-full" style={leftFaceStyle}>
         {!rightIsVisible && <div style={{ ...visibleRim }} />}
       </div>
 
-      {/* ✅ BOTTOM (fixed alignment + shadow) */}
+      {/* BOTTOM */}
       <div
-        className="absolute w-full rounded-b-xl"
+        className="absolute w-full"
         style={{
           height: `${cubeDepth}px`,
-          transform: `rotateX(90deg) translateZ(-${cubeDepth / 15}px)`,
+          transform: `rotateX(90deg) translateZ(-${cubeDepth / 2 + 110}px)`,
           background: THEME.bottom,
           borderBottom: `1px solid ${THEME.border}`,
+          borderRadius: `${cubeRadius}px`,
           boxShadow: "inset 0 8px 20px rgba(0,0,0,0.35)",
           zIndex: 2,
         }}
@@ -196,11 +194,12 @@ const Cube = ({ icon: Icon, label, variants }) => {
 
       {/* BACK */}
       <div
-        className="absolute w-full h-full rounded-xl"
+        className="absolute w-full h-full"
         style={{
           transform: `rotateY(180deg) translateZ(${cubeDepth / 2}px)`,
           background: THEME.back,
           border: `1px solid ${THEME.border}`,
+          borderRadius: `${cubeRadius}px`,
         }}
       />
     </motion.div>
@@ -208,8 +207,8 @@ const Cube = ({ icon: Icon, label, variants }) => {
 };
 
 /* =========================================================
-   ⚙️ Agentic AI Flow (Main Section)
-   ========================================================= */
+  ⚙️ Agentic AI Flow (Main Section)
+  ========================================================= */
 export default function AgenticAIFlow() {
   const tasks = [
     { icon: Search, label: "Scan Repos" },
@@ -242,31 +241,37 @@ export default function AgenticAIFlow() {
     mouseY.set(0);
   };
 
+  // UPDATED: Set a reusable stagger amount
+  const staggerAmount = 0.5;
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: { when: "beforeChildren", staggerChildren: 0.2 },
+      // UPDATED: Increased stagger duration
+      transition: { when: "beforeChildren", staggerChildren: staggerAmount },
     },
   };
 
+  // UPDATED: Changed transition for opacity to fix 3D glitch
   const itemVariants = {
     hidden: {
       opacity: 0,
-      y: 30,
+      y: 50, // Start lower
       scale: 0.95,
-      rotateX: tilt.rx,
-      rotateY: tilt.ry,
-      rotateZ: tilt.rz,
     },
     visible: {
       opacity: 1,
       y: 0,
       scale: 1,
-      rotateX: tilt.rx,
-      rotateY: tilt.ry,
-      rotateZ: tilt.rz,
-      transition: { type: "spring", stiffness: 100, damping: 12 },
+      transition: {
+        // Spring for y and scale
+        type: "spring",
+        stiffness: 100,
+        damping: 14,
+        // Tween for opacity to prevent 3D rendering glitch
+        opacity: { duration: 0.4, ease: "easeInOut" },
+      },
     },
   };
 
@@ -282,7 +287,7 @@ export default function AgenticAIFlow() {
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <div
           aria-hidden
-          className="absolute bottom-0 left-1/2 w-3/4 h-1/2 -translate-x-1/2 translate-y-1/2 rounded-full bg-gradient-to-r from-purple-900/50 via-indigo-900/60 to-transparent blur-3xl opacity-40"
+          className="absolute bottom-0 left-1/2 w-3A/4 h-1/2 -translate-x-1/2 translate-y-1/2 rounded-full bg-gradient-to-r from-purple-900/50 via-indigo-900/60 to-transparent blur-3xl opacity-40"
         />
       </div>
 
@@ -295,71 +300,124 @@ export default function AgenticAIFlow() {
         className="relative flex items-center justify-center w-full max-w-7xl mx-auto px-4"
         style={{ y: translateY }}
       >
+        {/* ================================================================ */}
+        {/* 3D Scene Wrapper                                                 */}
+        {/* ================================================================ */}
         <motion.div
-          className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-4 rounded-3xl p-8"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.2 }}
-          style={{ transformStyle: "preserve-3d" }}
+          className="relative"
+          style={{
+            transformStyle: "preserve-3d",
+            // Apply the base tilt here
+            rotateX: tilt.rx,
+            rotateY: tilt.ry,
+            rotateZ: tilt.rz,
+          }}
+          // Apply the hover animation to the *whole scene*
+          whileHover={{
+            rotateX: tilt.rx + 5,
+            rotateY: tilt.ry - 5,
+            translateZ: 15,
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
-          {tasks.map((task, idx) => (
-            <React.Fragment key={task.label}>
-              <Cube icon={task.icon} label={task.label} variants={itemVariants} />
+          {/* === Dashboard Base Layer (Now inside 3D scene) === */}
+          <motion.div
+            // UPDATED: Made wider
+            className="absolute w-[120%] h-[400px] rounded-3xl"
+            style={{
+              // UPDATED: Pushed much further back and shifted down slightly
+              transform: `
+                rotateY(180deg)
+                translateZ(-250px)
+                translateY(20px)
+              `,
+              background:
+                "linear-gradient(180deg, rgba(20,35,60,0.7), rgba(10,15,30,0.95))",
+              border: "1px solid rgba(120,180,255,0.25)",
+              boxShadow:
+                "0 20px 50px rgba(0,0,0,0.45), inset 0 0 50px rgba(88,203,255,0.08)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+              zIndex: 0, // Behind the cubes
+              // Ensure it covers the area behind the cubes
+              left: "50%",
+              top: "50%",
+              translateX: "-50%",
+              translateY: "-50%",
+            }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          />
 
-              {/* Connectors */}
-              {idx < tasks.length - 1 && (
-                <>
-                  {/* Desktop line */}
-                  <motion.div
-                    className="w-16 h-1 bg-gray-700/50 rounded-full relative overflow-hidden hidden md:block"
-                    variants={itemVariants}
-                  >
-                    <motion.div
-                      className="absolute top-0 left-0 h-full rounded-full"
-                      style={{
-                        width: "25%",
-                        background:
-                          "linear-gradient(90deg, transparent, rgba(88,203,255,0.9), transparent)",
-                        filter: "blur(4px)",
-                      }}
-                      animate={{ x: ["-120%", "220%"] }}
-                      transition={{
-                        duration: 1.6,
-                        delay: idx * 0.28 + 0.6,
-                        repeat: Infinity,
-                        repeatDelay: 1,
-                        ease: "linear",
-                      }}
-                    />
-                  </motion.div>
+          {/* === Cube Container (Now inside 3D scene) === */}
+          <motion.div
+            className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-4 rounded-3xl p-8 relative z-10"
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            style={{ transformStyle: "preserve-3d" }}
+          >
+            {tasks.map((task, idx) => (
+              <React.Fragment key={task.label}>
+                <Cube icon={task.icon} label={task.label} variants={itemVariants} />
 
-                  {/* Mobile line */}
-                  <motion.div
-                    className="w-1 h-16 bg-gray-700/50 rounded-full relative overflow-hidden md:hidden"
-                    variants={itemVariants}
-                  >
+                {/* Connectors */}
+                {idx < tasks.length - 1 && (
+                  <>
                     <motion.div
-                      className="absolute top-0 left-0 w-full h-1/4 rounded-full"
-                      style={{
-                        background:
-                          "linear-gradient(180deg, transparent, rgba(88,203,255,0.9))",
-                        filter: "blur(4px)",
-                      }}
-                      animate={{ y: ["-120%", "240%"] }}
-                      transition={{
-                        duration: 1.6,
-                        delay: idx * 0.3 + 0.6,
-                        repeat: Infinity,
-                        repeatDelay: 1,
-                        ease: "linear",
-                      }}
-                    />
-                  </motion.div>
-                </>
-              )}
-            </React.Fragment>
-          ))}
+                      className="w-16 h-1 bg-gray-700/50 rounded-full relative overflow-hidden hidden md:block"
+                      variants={itemVariants} // Use itemVariants for staggered animation
+                    >
+                      <motion.div
+                        className="absolute top-0 left-0 h-full rounded-full"
+                        style={{
+                          width: "25%",
+                          background:
+                            "linear-gradient(90deg, transparent, rgba(88,203,255,0.9), transparent)",
+                          filter: "blur(4px)",
+                        }}
+                        animate={{ x: ["-120%", "220%"] }}
+                        transition={{
+                          duration: 1.6,
+                          // UPDATED: Delay calc respects stagger
+                          delay: (idx * 2 + 1) * staggerAmount + 0.3,
+                          repeat: Infinity,
+                          repeatDelay: 1,
+                          ease: "linear",
+                        }}
+                      />
+                    </motion.div>
+
+                    {/* Mobile vertical line */}
+                    <motion.div
+                      className="w-1 h-16 bg-gray-700/50 rounded-full relative overflow-hidden md:hidden"
+                      variants={itemVariants} // Use itemVariants for staggered animation
+                    >
+                      <motion.div
+                        className="absolute top-0 left-0 w-full h-1/4 rounded-full"
+                        style={{
+                          background:
+                            "linear-gradient(180deg, transparent, rgba(88,203,255,0.9))",
+                          filter: "blur(4px)",
+                        }}
+                        animate={{ y: ["-120%", "240%"] }}
+                        transition={{
+                          duration: 1.6,
+                          // UPDATED: Delay calc respects stagger
+                          delay: (idx * 2 + 1) * staggerAmount + 0.3,
+                          repeat: Infinity,
+                          repeatDelay: 1,
+                          ease: "linear",
+                        }}
+                      />
+                    </motion.div>
+                  </>
+                )}
+              </React.Fragment>
+            ))}
+          </motion.div>
         </motion.div>
       </motion.div>
 
@@ -372,3 +430,4 @@ export default function AgenticAIFlow() {
     </section>
   );
 }
+
