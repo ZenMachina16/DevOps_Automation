@@ -1,10 +1,7 @@
+"use client";
+
 import React, { useRef } from "react";
-import {
-  motion,
-  useMotionValue,
-  useTransform,
-  useSpring,
-} from "framer-motion";
+import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
 import {
   Search,
   AlertTriangle,
@@ -13,80 +10,206 @@ import {
   ClipboardList,
 } from "lucide-react";
 
-/**
- * A reusable 3D Cube component
- */
+/* =========================================================
+   🎨 THEME — Cube colors + borders
+   ========================================================= */
+const THEME = {
+  front: "linear-gradient(180deg, #41995dff, #080c14)",
+  top: "linear-gradient(180deg, rgba(71,163,225,1), rgba(100,120,150,0.1))",
+  rightDark:
+    "linear-gradient(90deg, rgba(80,100,130,0.8), rgba(40,50,65,0.75))",
+  leftBright:
+    "linear-gradient(-90deg, rgba(100,180,255,0.7), rgba(50,80,120,0.9))",
+  leftDark:
+    "linear-gradient(-90deg, rgba(80,100,130,0.8), rgba(40,50,65,0.75))",
+  rightBright:
+    "linear-gradient(90deg, rgba(100,180,255,0.7), rgba(50,80,120,0.9))",
+  bottom:
+    "linear-gradient(180deg, rgba(87,108,151,0.85), rgba(87,87,253,0.8))",
+  back: "linear-gradient(180deg, #101828, #02040a)",
+  border: "rgba(150,200,255,0.4)",
+};
+
+const FACE_FLIP = false;
+
+/* =========================================================
+   🧊 Cube Component
+   ========================================================= */
 const Cube = ({ icon: Icon, label, variants }) => {
-  const cubeDepth = 50; // The "thickness" of the cube
+  const cubeDepth = 50;
+  const tilt = { rx: 30, ry: -12, rz: 3 };
+
+  const rightIsVisibleBySign = tilt.ry > 0;
+  const rightIsVisible = FACE_FLIP
+    ? !rightIsVisibleBySign
+    : rightIsVisibleBySign;
+
+  const rightBg = rightIsVisible ? THEME.rightBright : THEME.rightDark;
+  const leftBg = rightIsVisible ? THEME.leftDark : THEME.leftBright;
+
+  // Right Face Styling
+  const rightFaceStyle = {
+    width: `${cubeDepth}px`,
+    transform: `rotateY(90deg) translateZ(${cubeDepth / 2}px)`,
+    background: rightBg,
+    backfaceVisibility: "hidden",
+    borderRight: rightIsVisible
+      ? "1px solid rgba(88,203,255,0.18)"
+      : `1px solid ${THEME.border}`,
+    boxShadow: rightIsVisible
+      ? "inset -10px 0 28px rgba(88,203,255,0.08), 0 10px 24px rgba(2,6,23,0.6)"
+      : "0 6px 18px rgba(2,6,23,0.5)",
+    zIndex: 6,
+    position: "absolute",
+    right: 0,
+    borderRadius: "0.5rem",
+  };
+
+  // Left Face Styling
+  const leftFaceStyle = {
+    width: `${cubeDepth}px`,
+    transform: `rotateY(-90deg) translateZ(${cubeDepth / 2}px)`,
+    background: leftBg,
+    backfaceVisibility: "hidden",
+    borderLeft: rightIsVisible
+      ? `1px solid ${THEME.border}`
+      : "1px solid rgba(88,203,255,0.12)",
+    boxShadow: rightIsVisible
+      ? "0 6px 18px rgba(2,6,23,0.5)"
+      : "inset 10px 0 28px rgba(88,203,255,0.06), 0 6px 18px rgba(2,6,23,0.6)",
+    zIndex: 6,
+    position: "absolute",
+    left: 0,
+    borderRadius: "0.5rem",
+  };
+
+  const visibleRim = {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    borderRadius: "inherit",
+    mixBlendMode: "screen",
+    background: rightIsVisible
+      ? "linear-gradient(120deg, rgba(255,255,255,0.06), rgba(255,255,255,0))"
+      : "linear-gradient(60deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
+    opacity: 1,
+    zIndex: 12,
+  };
 
   return (
     <motion.div
-      className="relative w-36 h-36 md:w-40 md:h-40 cursor-pointer"
+      className="relative w-36 h-36 md:w-40 md:h-40 cursor-pointer group"
       style={{
         transformStyle: "preserve-3d",
-        transform: "rotateX(-25deg) rotateY(20deg)", // Initial 3D tilt
+        willChange: "transform",
+        translateY: "-55px",
       }}
+      variants={variants}
       whileHover={{
-        rotateX: -15, // Less tilt on X
-        rotateY: 25, // More tilt on Y
-        translateZ: 25, // Pop forward
-        scale: 1.05,
+        rotateX: tilt.rx + 5,
+        rotateY: tilt.ry - 5,
+        translateZ: 15,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      variants={variants}
     >
-      {/* Front Face */}
+      {/* Shadow below cube */}
       <div
-        className="absolute w-full h-full flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm border border-blue-400/20 rounded-xl p-4 md:p-6 shadow-xl overflow-hidden group"
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "86%",
+          transform: "translateX(-50%)",
+          width: "88%",
+          height: 16,
+          background:
+            "radial-gradient(closest-side, rgba(0,0,0,0.36), rgba(0,0,0,0))",
+          filter: "blur(10px)",
+          zIndex: 0,
+        }}
+      />
+
+      {/* ✅ FRONT (fixed + subtle rim) */}
+      <div
+        className="absolute w-full h-full flex flex-col items-center justify-center rounded-xl p-4 md:p-6 overflow-hidden"
         style={{
           transform: `translateZ(${cubeDepth / 2}px)`,
-          backfaceVisibility: "hidden",
+          background: THEME.front,
+          border: `1px solid ${THEME.border}`,
+          boxShadow: "0 6px 18px rgba(2,6,23,0.6)",
+          zIndex: 10,
         }}
       >
-        <motion.div
-          className="absolute inset-0 rounded-xl pointer-events-none"
-          initial={{ opacity: 0 }}
-          group-hover={{
-            opacity: 1,
-            boxShadow: "inset 0 0 10px rgba(60, 150, 255, 0.4)",
-            borderColor: "rgba(60, 150, 255, 0.8)",
+        {/* Light reflection overlay */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "inherit",
+            background:
+              "linear-gradient(120deg, rgba(255,255,255,0.06), rgba(255,255,255,0))",
+            mixBlendMode: "screen",
+            pointerEvents: "none",
           }}
-          transition={{ duration: 0.2 }}
         />
-        <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-300 mb-2 border border-blue-400/30">
-          <Icon size={30} />
+        <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-2 border border-blue-400/30">
+          <Icon size={30} className="text-blue-300" />
         </div>
         <h3 className="text-sm font-medium text-gray-100 text-center">
           {label}
         </h3>
       </div>
 
-      {/* Top Face - Now more visible */}
+      {/* TOP */}
       <div
-        className="absolute w-full bg-gray-800/80 border-x border-t border-white/20 rounded-t-xl"
+        className="absolute w-full rounded-t-xl"
         style={{
           height: `${cubeDepth}px`,
-          transform: `rotateX(90deg) translateZ(${cubeDepth / 2}px)`,
-          backfaceVisibility: "hidden",
+          transform: `rotateX(-90deg) translateZ(${cubeDepth / 2}px)`,
+          background: THEME.top,
+          borderTop: `1px solid ${THEME.border}`,
         }}
       />
 
-      {/* Left Face - Now more visible */}
+      {/* RIGHT */}
+      <div className="absolute h-full rounded-r-xl" style={rightFaceStyle}>
+        {rightIsVisible && <div style={{ ...visibleRim }} />}
+      </div>
+
+      {/* LEFT */}
+      <div className="absolute h-full rounded-l-xl" style={leftFaceStyle}>
+        {!rightIsVisible && <div style={{ ...visibleRim }} />}
+      </div>
+
+      {/* ✅ BOTTOM (fixed alignment + shadow) */}
       <div
-        className="absolute h-full bg-gray-800/70 border-y border-l border-white/20 rounded-l-xl"
+        className="absolute w-full rounded-b-xl"
         style={{
-          width: `${cubeDepth}px`,
-          transform: `rotateY(-90deg) translateZ(${cubeDepth / 2}px)`,
-          backfaceVisibility: "hidden",
+          height: `${cubeDepth}px`,
+          transform: `rotateX(90deg) translateZ(-${cubeDepth / 15}px)`,
+          background: THEME.bottom,
+          borderBottom: `1px solid ${THEME.border}`,
+          boxShadow: "inset 0 8px 20px rgba(0,0,0,0.35)",
+          zIndex: 2,
+        }}
+      />
+
+      {/* BACK */}
+      <div
+        className="absolute w-full h-full rounded-xl"
+        style={{
+          transform: `rotateY(180deg) translateZ(${cubeDepth / 2}px)`,
+          background: THEME.back,
+          border: `1px solid ${THEME.border}`,
         }}
       />
     </motion.div>
   );
 };
 
-/**
- * Component for the Agentic AI Workflow
- */
+/* =========================================================
+   ⚙️ Agentic AI Flow (Main Section)
+   ========================================================= */
 export default function AgenticAIFlow() {
   const tasks = [
     { icon: Search, label: "Scan Repos" },
@@ -96,14 +219,13 @@ export default function AgenticAIFlow() {
     { icon: ClipboardList, label: "Generate Reports" },
   ];
 
+  const tilt = { rx: 30, ry: -12, rz: 3 };
   const flowRef = useRef(null);
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
-  // Parallax for floating the whole section
   const translateYRaw = useTransform(mouseY, [-0.5, 0.5], [-10, 10]);
-  const springOpts = { damping: 24, stiffness: 150 };
-  const translateY = useSpring(translateYRaw, springOpts);
+  const translateY = useSpring(translateYRaw, { damping: 24, stiffness: 150 });
 
   const handleMouseMove = (e) => {
     const el = flowRef.current;
@@ -124,19 +246,26 @@ export default function AgenticAIFlow() {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        when: "beforeChildren",
-        staggerChildren: 0.2,
-      },
+      transition: { when: "beforeChildren", staggerChildren: 0.2 },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 30, scale: 0.95 },
+    hidden: {
+      opacity: 0,
+      y: 30,
+      scale: 0.95,
+      rotateX: tilt.rx,
+      rotateY: tilt.ry,
+      rotateZ: tilt.rz,
+    },
     visible: {
       opacity: 1,
       y: 0,
       scale: 1,
+      rotateX: tilt.rx,
+      rotateY: tilt.ry,
+      rotateZ: tilt.rz,
       transition: { type: "spring", stiffness: 100, damping: 12 },
     },
   };
@@ -145,11 +274,11 @@ export default function AgenticAIFlow() {
     <section
       id="workflow"
       className="relative flex flex-col items-center justify-center min-h-screen py-32 px-6 bg-black text-white overflow-hidden"
-      style={{ perspective: "1000px" }} // Add perspective to the main section
+      style={{ perspective: "1000px" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Decorative background glow */}
+      {/* Background Glow */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <div
           aria-hidden
@@ -161,91 +290,85 @@ export default function AgenticAIFlow() {
         Agentic AI Workflow
       </h2>
 
-      {/* Main Container for the cubes and connectors */}
       <motion.div
         ref={flowRef}
-        className="relative flex items-center justify-center w-full max-w-7xl mx-auto px-4" // Added max-w and px-4
-        style={{
-          y: translateY,
-        }}
+        className="relative flex items-center justify-center w-full max-w-7xl mx-auto px-4"
+        style={{ y: translateY }}
       >
         <motion.div
-          className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-4 rounded-3xl p-8" // Adjusted gap
+          className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-4 rounded-3xl p-8"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.2 }}
+          style={{ transformStyle: "preserve-3d" }}
         >
-          {tasks.map((task, idx) => {
-            return (
-              <React.Fragment key={task.label}>
-                <Cube
-                  icon={task.icon}
-                  label={task.label}
-                  variants={itemVariants}
-                />
+          {tasks.map((task, idx) => (
+            <React.Fragment key={task.label}>
+              <Cube icon={task.icon} label={task.label} variants={itemVariants} />
 
-                {/* Connector "Track" - DESKTOP */}
-                {idx < tasks.length - 1 && (
+              {/* Connectors */}
+              {idx < tasks.length - 1 && (
+                <>
+                  {/* Desktop line */}
                   <motion.div
-                    className="w-16 h-1 bg-gray-700/50 rounded-full relative overflow-hidden hidden md:block" // Reduced width
+                    className="w-16 h-1 bg-gray-700/50 rounded-full relative overflow-hidden hidden md:block"
                     variants={itemVariants}
                   >
                     <motion.div
-                      className="absolute top-0 left-0 w-1/4 h-full bg-gradient-to-r from-transparent to-blue-400/80"
+                      className="absolute top-0 left-0 h-full rounded-full"
                       style={{
-                        translateX: "-100%",
+                        width: "25%",
+                        background:
+                          "linear-gradient(90deg, transparent, rgba(88,203,255,0.9), transparent)",
                         filter: "blur(4px)",
                       }}
-                      animate={{ translateX: ["-100%", "400%"] }}
+                      animate={{ x: ["-120%", "220%"] }}
                       transition={{
-                        duration: 1.5,
-                        delay: idx * 0.3 + 1,
+                        duration: 1.6,
+                        delay: idx * 0.28 + 0.6,
                         repeat: Infinity,
                         repeatDelay: 1,
                         ease: "linear",
                       }}
                     />
                   </motion.div>
-                )}
 
-                {/* Connector "Track" - MOBILE */}
-                {idx < tasks.length - 1 && (
+                  {/* Mobile line */}
                   <motion.div
                     className="w-1 h-16 bg-gray-700/50 rounded-full relative overflow-hidden md:hidden"
-                    style={{
-                      transformOrigin: "top",
-                    }}
                     variants={itemVariants}
                   >
                     <motion.div
-                      className="absolute top-0 left-0 w-full h-1/4 bg-gradient-to-b from-transparent to-blue-400/80"
+                      className="absolute top-0 left-0 w-full h-1/4 rounded-full"
                       style={{
-                        translateY: "-100%",
+                        background:
+                          "linear-gradient(180deg, transparent, rgba(88,203,255,0.9))",
                         filter: "blur(4px)",
                       }}
-                      animate={{ translateY: ["-100%", "400%"] }}
+                      animate={{ y: ["-120%", "240%"] }}
                       transition={{
-                        duration: 1.5,
-                        delay: idx * 0.3 + 1,
+                        duration: 1.6,
+                        delay: idx * 0.3 + 0.6,
                         repeat: Infinity,
                         repeatDelay: 1,
                         ease: "linear",
                       }}
                     />
                   </motion.div>
-                )}
-              </React.Fragment>
-            );
-          })}
+                </>
+              )}
+            </React.Fragment>
+          ))}
         </motion.div>
       </motion.div>
+
       <p className="mt-24 text-gray-400 text-center max-w-2xl text-lg z-10">
-        Our intelligent agents autonomously handle every step, from scanning and fixing code{" "}
+        Our intelligent agents autonomously handle every step, from scanning and
+        fixing code{" "}
         <span className="text-green-300">to deploying changes</span> and
         generating comprehensive reports.
       </p>
     </section>
   );
 }
-
