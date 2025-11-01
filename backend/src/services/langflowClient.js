@@ -68,7 +68,7 @@ export class N8nClient {
         headers: {
           'Content-Type': 'application/json'
         },
-        timeout: 60000 // 60 second timeout for LLM processing
+        timeout: 100000000 // 60 second timeout for LLM processing
       });
 
       console.log('n8n response:', response.data);

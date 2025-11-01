@@ -3,11 +3,13 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
 import BaseLayout from "./components/layout/BaseLayout";
-import LandingPage from "./pages/Landing/LandingPage.jsx"; // updated import
+import LandingPage from "./pages/Landing/LandingPage.jsx";
 import Scan from "./pages/Scan.jsx";
 import api from "./api/axios.js";
 
-// Protected Route for authenticated pages
+// ===============================
+// 🔒 Protected Route Wrapper
+// ===============================
 function ProtectedRoute({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +45,9 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+// ===============================
+// 🌐 Main App Router
+// ===============================
 export default function App() {
   useEffect(() => {
     document.title = "DevOps Automation Dashboard";
@@ -50,7 +55,9 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Landing Page with BaseLayout and animation */}
+      {/* =============================== */}
+      {/* 🏠 Landing Page with BaseLayout */}
+      {/* =============================== */}
       <Route
         path="/"
         element={
@@ -66,19 +73,21 @@ export default function App() {
         }
       />
 
-      {/* Protected Scan Page */}
+      {/* ========================================== */}
+      {/* 🔐 Protected Scan Page (No BaseLayout Here) */}
+      {/* ========================================== */}
       <Route
         path="/scan"
         element={
           <ProtectedRoute>
-            <BaseLayout>
-              <Scan />
-            </BaseLayout>
+            <Scan />
           </ProtectedRoute>
         }
       />
 
-      {/* Catch-all redirect */}
+      {/* ====================== */}
+      {/* 🚫 Fallback Redirection */}
+      {/* ====================== */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
