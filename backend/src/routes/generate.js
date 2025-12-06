@@ -1,8 +1,40 @@
 import { Router } from 'express';
+import axios from 'axios';
 import { generateGapReport, fetchPackageJson, parseGitHubUrl } from '../services/repoScanner.js';
 import { n8nClient } from '../services/langflowClient.js';
 
 const router = Router();
+
+function getSessionAccessToken(req) {
+  if (req.user?.accessToken) return req.user.accessToken;
+  const token = req.session?.passport?.user?.accessToken;
+  return token || null;
+}
+
+async function fetchGithubFileRaw({ owner, repo, path, branch, accessToken }) {
+  const headers = {
+    'Accept': 'application/vnd.github.v3.raw',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const refQuery = branch ? `?ref=${encodeURIComponent(branch)}` : '';
+  // Encode each path segment and preserve '/'
+  const encodedPath = String(path)
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}${refQuery}`;
+  const resp = await axios.get(url, {
+    headers,
+    validateStatus: () => true,
+    responseType: 'text',
+  });
+  if (resp.status !== 200) {
+    return { ok: false, status: resp.status, error: resp.data };
+  }
+  return { ok: true, content: resp.data };
+}
 
 /**
  * POST /api/generate-files
@@ -31,9 +63,32 @@ router.post('/generate-files', async (req, res) => {
     console.log('Repository metadata:', metadata);
 
     // Step 3: Call n8n agent to generate files
-    const generatedFiles = await n8nClient.generateFiles(repoUrl, gapReport, metadata);
+    const n8nResult = await n8nClient.generateFiles(repoUrl, gapReport, metadata);
 
-    // Step 4: Return combined results
+    // Step 4: Optionally fetch committed files from GitHub using OAuth token
+    let fetchedFiles = undefined;
+    try {
+      if (n8nResult?.branch) {
+        const accessToken = getSessionAccessToken(req);
+        const owner = parsed.owner;
+        const repo = parsed.repo;
+        const branch = n8nResult.branch;
+        const candidates = Array.isArray(n8nResult.files) && n8nResult.files.length > 0
+          ? n8nResult.files.map((f) => (typeof f === 'string' ? f : f.path)).filter(Boolean)
+          : (n8nResult.file ? [n8nResult.file] : ['Dockerfile', '.github/workflows/main.yml', 'README.md']);
+
+        const results = [];
+        for (const path of candidates) {
+          const r = await fetchGithubFileRaw({ owner, repo, path, branch, accessToken });
+          if (r.ok) results.push({ path, content: r.content });
+        }
+        fetchedFiles = results;
+      }
+    } catch (_err) {
+      // Ignore fetch errors; frontend can call dedicated endpoints
+    }
+
+    // Step 5: Return combined results
     return res.json({
       success: true,
       repository: {
@@ -42,7 +97,8 @@ router.post('/generate-files', async (req, res) => {
         name: parsed.repo
       },
       gapReport,
-      generatedFiles,
+      ...n8nResult,
+      files: fetchedFiles,
       timestamp: new Date().toISOString()
     });
 

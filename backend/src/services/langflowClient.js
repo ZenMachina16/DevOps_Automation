@@ -68,7 +68,7 @@ export class N8nClient {
         headers: {
           'Content-Type': 'application/json'
         },
-        timeout: 60000 // 60 second timeout for LLM processing
+        timeout: 6000000 // 60 second timeout for LLM processing
       });
 
       console.log('n8n response:', response.data);
@@ -85,7 +85,31 @@ export class N8nClient {
    * @returns {Object} Processed response with generated content
    */
   processN8nResponse(response) {
-    // n8n returns the structured response directly
+    // Preferred: structured payload from Respond node including repo/branch/file
+    if (response?.success === true && response?.repository && (response?.file || response?.files)) {
+      return {
+        success: true,
+        repository: response.repository,
+        branch: response.branch || response.branchName || null,
+        file: response.file, // may be a string path
+        files: response.files, // optional array
+        status: response.status,
+        timestamp: response.timestamp,
+        message: response.message,
+      };
+    }
+
+    // Minimal payload: sometimes workflow responds with only { branch: "..." }
+    if (response?.branch || response?.branchName) {
+      return {
+        success: true,
+        branch: response.branch || response.branchName,
+        file: response.file,
+        files: response.files,
+      };
+    }
+
+    // Back-compat: inline generatedFiles content
     if (response.success && response.generatedFiles) {
       return {
         success: true,

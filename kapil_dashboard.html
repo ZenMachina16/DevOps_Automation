@@ -157,21 +157,21 @@
                         </div>
                     </div>
                     <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 flex items-start space-x-4">
-                        <div class="text-3xl pt-1">🤖</div>
+                        <div class="text-3xl pt-1"></div>
                         <div>
                             <h3 class="font-semibold text-lg text-stone-800">Automation</h3>
                             <p class="text-stone-600 mt-1">Automate everything from testing and infrastructure setup (Infrastructure as Code) to deployment, reducing manual effort and human error.</p>
                         </div>
                     </div>
                     <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 flex items-start space-x-4">
-                        <div class="text-3xl pt-1">📈</div>
+                        <div class="text-3xl pt-1"></div>
                         <div>
                             <h3 class="font-semibold text-lg text-stone-800">Monitoring & Feedback</h3>
                             <p class="text-stone-600 mt-1">Continuously monitor application performance and infrastructure to identify issues proactively and gather feedback for future improvements.</p>
                         </div>
                     </div>
                     <div class="bg-white p-6 rounded-xl shadow-md border border-stone-200 flex items-start space-x-4">
-                        <div class="text-3xl pt-1">✅</div>
+                        <div class="text-3xl pt-1"></div>
                         <div>
                             <h3 class="font-semibold text-lg text-stone-800">Testing</h3>
                             <p class="text-stone-600 mt-1">Integrate automated and continuous testing throughout the entire development lifecycle to catch bugs early and ensure quality.</p>
@@ -190,6 +190,12 @@
 
         <footer class="text-center py-8 border-t border-stone-200 mt-16">
             <p class="text-stone-500">Interactive DevOps Guide | Built with modern web technologies.</p>
+            <div id="github-branch-cta" class="mt-4 hidden">
+                <a id="githubBranchLink" href="#" target="_blank" rel="noopener" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                    View Branch in GitHub
+                </a>
+                <div id="github-branch-hint" class="mt-2 text-sm text-stone-500"></div>
+            </div>
         </footer>
     </div>
 
@@ -338,6 +344,144 @@
                 });
             });
 
+            // GitHub Branch Deep-Linking
+            const branchLinkContainer = document.getElementById('github-branch-cta');
+            const branchLinkAnchor = document.getElementById('githubBranchLink');
+            const branchHint = document.getElementById('github-branch-hint');
+
+            let ghOwner = null;
+            let ghRepo = null;
+            let ghRepoUrl = null;
+            let ghBranch = null;
+
+            function buildRepoUrl(owner, repo) {
+                if (ghRepoUrl && ghRepoUrl.startsWith('http')) {
+                    return ghRepoUrl.replace(/\/$/, '');
+                }
+                if (owner && repo) {
+                    return `https://github.com/${owner}/${repo}`;
+                }
+                return null;
+            }
+
+            function updateBranchCta() {
+                const base = buildRepoUrl(ghOwner, ghRepo);
+                if (!base || !ghBranch) {
+                    return;
+                }
+                const href = `${base}/tree/${encodeURIComponent(ghBranch)}`;
+                branchLinkAnchor.setAttribute('href', href);
+                branchHint.textContent = `Repo: ${base.replace('https://github.com/', '')} | Branch: ${ghBranch}`;
+                branchLinkContainer.classList.remove('hidden');
+            }
+
+            function setGitHubBranchInfo(payload) {
+                if (!payload || typeof payload !== 'object') return;
+                if (payload.url) ghRepoUrl = payload.url;
+                if (payload.owner) ghOwner = payload.owner;
+                if (payload.name) ghRepo = payload.name;
+                if (payload.repo) ghRepo = payload.repo; // support alternate key
+                if (payload.branch) ghBranch = payload.branch;
+                updateBranchCta();
+            }
+
+            // Expose a simple API so external scripts/terminal integrations can set the info directly
+            window.setGitHubBranchInfo = setGitHubBranchInfo;
+
+            // Accept postMessage from parent/opener with the info
+            window.addEventListener('message', (event) => {
+                try {
+                    const data = event.data;
+                    if (!data) return;
+                    // Support flexible shapes
+                    if (data.type === 'github-branch-info' && data.payload) {
+                        setGitHubBranchInfo(data.payload);
+                        return;
+                    }
+                    // Flat shape
+                    if (data.owner || data.name || data.repo || data.url || data.branch) {
+                        setGitHubBranchInfo(data);
+                        return;
+                    }
+                    // Nested n8n response shape
+                    if (data.n8n && (data.n8n.owner || data.n8n.name || data.n8n.repo || data.n8n.url || data.n8n.branch)) {
+                        setGitHubBranchInfo(data.n8n);
+                    }
+                } catch (_) {
+                    // no-op
+                }
+            });
+
+            // Try to autodetect from terminal-like text in the page
+            function extractFromText(text) {
+                if (!text) return false;
+                // Owner / name / url from JSON-like content
+                const ownerMatch = text.match(/"owner"\s*:\s*"([^"]+)"/i);
+                const nameMatch = text.match(/"name"\s*:\s*"([^"]+)"/i);
+                const urlMatch = text.match(/"url"\s*:\s*"(https:\/\/github\.com\/[^"]+)"/i);
+                if (ownerMatch && !ghOwner) ghOwner = ownerMatch[1];
+                if (nameMatch && !ghRepo) ghRepo = nameMatch[1];
+                if (urlMatch && !ghRepoUrl) ghRepoUrl = urlMatch[1];
+
+                // Branch from explicit key
+                const branchKeyMatch = text.match(/branch["']?\s*[:=]\s*["']([^"']+)["']/i);
+                // Branch from n8n response narrative: e.g., n8n response as 'shipiq-agent-1764865580793'
+                const n8nMatch = text.match(/n8n\s*response[^"'\n]*["']([^"']+)["']/i);
+                // Fallback: quoted token that looks like a branch (allow slashes, dots, dashes, underscores; optional trailing long digits)
+                const genericQuoted = text.match(/["']([a-z0-9._/-]+(?:-[0-9]{8,})?)["']/i);
+
+                if (!ghBranch && branchKeyMatch) ghBranch = branchKeyMatch[1];
+                if (!ghBranch && n8nMatch) ghBranch = n8nMatch[1];
+                if (!ghBranch && genericQuoted) ghBranch = genericQuoted[1];
+
+                if (buildRepoUrl(ghOwner, ghRepo) && ghBranch) {
+                    updateBranchCta();
+                    return true;
+                }
+                return false;
+            }
+
+            function scanDomForTerminalText() {
+                const candidates = [
+                    '#terminal-output',
+                    '#terminal',
+                    '[data-terminal]',
+                    '.terminal',
+                    '#node'
+                ];
+                let aggregated = '';
+                candidates.forEach(sel => {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        aggregated += ' ' + (el.innerText || el.textContent || '');
+                    }
+                });
+                if (!aggregated) {
+                    // As a last resort, use entire body text (can be noisy)
+                    aggregated = document.body ? (document.body.innerText || document.body.textContent || '') : '';
+                }
+                if (aggregated) {
+                    extractFromText(aggregated);
+                }
+            }
+
+            // Debounced observer to catch late-arriving terminal output
+            let debounceTimer = null;
+            const observer = new MutationObserver(() => {
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    if (branchLinkContainer.classList.contains('hidden')) {
+                        scanDomForTerminalText();
+                    } else {
+                        // We have what we need; stop observing
+                        observer.disconnect();
+                    }
+                }, 250);
+            });
+            observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+            // Initial scan in case content is already present
+            scanDomForTerminalText();
         });
     </script>
 </body>

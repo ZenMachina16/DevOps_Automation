@@ -9,6 +9,7 @@ import scanRouter from './src/routes/scan.js';
 import authRouter from './src/routes/auth.js';
 import generateRouter from './src/routes/generate.js';
 import githubWebhookRouter from './src/routes/githubWebhook.js';
+import repoFilesRouter from './src/routes/repoFiles.js';
 
 dotenv.config();
 console.log('Loaded N8N_WEBHOOK_URL:', process.env.N8N_WEBHOOK_URL);
@@ -57,6 +58,7 @@ app.use('/api', scanRouter);
 app.use('/api', generateRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/github', githubWebhookRouter);
+app.use('/api', repoFilesRouter);
 
 const PORT = process.env.PORT ?? 5000;
 app.listen(PORT, () => {
