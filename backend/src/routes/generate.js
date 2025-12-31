@@ -1,83 +1,124 @@
 import { Router } from 'express';
-import { generateGapReport, fetchPackageJson, parseGitHubUrl } from '../services/repoScanner.js';
+import {
+  generateGapReport,
+  fetchPackageJson,
+  parseGitHubUrl,
+} from '../services/repoScanner.js';
 import { n8nClient } from '../services/langflowClient.js';
 
 const router = Router();
 
 /**
  * POST /api/generate-files
- * Generate missing DevOps files using Langflow agent
+ * Triggers DevOps automation via n8n
  */
 router.post('/generate-files', async (req, res) => {
   try {
     const { repoUrl } = req.body;
-    
+
     if (!repoUrl || typeof repoUrl !== 'string') {
       return res.status(400).json({ error: 'repoUrl is required' });
     }
 
-    console.log(`Starting file generation for repo: ${repoUrl}`);
+    console.log(`🚀 DevOps generation started for: ${repoUrl}`);
 
-    // Step 1: Get gap report (what's missing)
-    const gapReport = await generateGapReport(repoUrl);
-    console.log('Gap report:', gapReport);
-
-    // Step 2: Get repository metadata (package.json, etc.)
+    /* -------------------------------------------------
+       1️⃣ Parse repository URL
+    -------------------------------------------------- */
     const parsed = parseGitHubUrl(repoUrl);
-    const metadata = await fetchPackageJson({ 
-      owner: parsed.owner, 
-      repo: parsed.repo 
+    if (!parsed) {
+      return res.status(400).json({ error: 'Invalid GitHub repository URL' });
+    }
+
+    /* -------------------------------------------------
+       2️⃣ Scan repository (FACTS ONLY)
+    -------------------------------------------------- */
+    const scanResult = await generateGapReport(repoUrl);
+
+    console.log('🔍 Scan result:', scanResult);
+
+    /* -------------------------------------------------
+       3️⃣ Fetch metadata (package.json if exists)
+    -------------------------------------------------- */
+    const metadata = await fetchPackageJson({
+      owner: parsed.owner,
+      repo: parsed.repo,
     });
-    console.log('Repository metadata:', metadata);
 
-    // Step 3: Call n8n agent to generate files
-    const generatedFiles = await n8nClient.generateFiles(repoUrl, gapReport, metadata);
+    console.log('📦 Repository metadata:', metadata);
 
-    // Step 4: Return combined results
+    /* -------------------------------------------------
+       4️⃣ Build canonical payload for n8n
+       (This must match Build Repo Context node)
+    -------------------------------------------------- */
+    const payloadForN8n = {
+      repository: {
+        owner: parsed.owner,
+        name: parsed.repo,
+        url: repoUrl,
+        defaultBranch: 'main',
+      },
+
+      project: {
+        language: 'JavaScript',
+        manifestFilename: 'package.json',
+        description:
+          metadata?.description ||
+          `${parsed.repo} application repository`,
+        dependencies: metadata?.dependencies || {},
+        scripts: metadata?.scripts || {},
+      },
+
+      scan: scanResult,
+      gap_report: scanResult.gapReport,
+
+      metadata,
+    };
+
+    /* -------------------------------------------------
+       5️⃣ Send payload to n8n DevOps workflow
+    -------------------------------------------------- */
+    const generatedFiles = await n8nClient.generateFiles(payloadForN8n);
+
+    /* -------------------------------------------------
+       6️⃣ Return response
+    -------------------------------------------------- */
     return res.json({
       success: true,
-      repository: {
-        url: repoUrl,
-        owner: parsed.owner,
-        name: parsed.repo
-      },
-      gapReport,
+      repository: payloadForN8n.repository,
+      scan: scanResult,
       generatedFiles,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
-    console.error('File generation error:', error);
-    
-    // Return detailed error information for debugging
+    console.error('❌ DevOps file generation failed:', error);
+
     return res.status(500).json({
       success: false,
       error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
 
 /**
  * GET /api/generate-status
- * Check if n8n service is available
+ * Checks n8n connectivity
  */
-router.get('/generate-status', async (req, res) => {
+router.get('/generate-status', async (_req, res) => {
   try {
-    const webhookUrl = process.env.N8N_WEBHOOK_URL ;
-    const isConfigured = !!webhookUrl;
+    const webhookUrl = process.env.N8N_WEBHOOK_URL;
 
     return res.json({
-      configured: isConfigured,
-      webhookUrl: webhookUrl,
+      configured: Boolean(webhookUrl),
       service: 'n8n',
-      timestamp: new Date().toISOString()
+      webhookUrl,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     return res.status(500).json({
       configured: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
