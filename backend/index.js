@@ -20,7 +20,7 @@ const app = express();
 passport.use(new GitHubStrategy({
   clientID: process.env.GITHUB_CLIENT_ID,
   clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  callbackURL: "http://localhost:5000/auth/callback"
+  callbackURL: "http://localhost:7000/auth/callback"
 }, (accessToken, refreshToken, profile, done) => {
   return done(null, { profile, accessToken });
 }));
@@ -29,7 +29,7 @@ passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: 'http://localhost:2000',
   credentials: true,
 }));
 
@@ -58,7 +58,7 @@ app.use('/api', generateRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/github', githubWebhookRouter);
 
-const PORT = process.env.PORT ?? 5000;
+const PORT = process.env.PORT ?? 7000;
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`Server listening on port ${PORT}`);

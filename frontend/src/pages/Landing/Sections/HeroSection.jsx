@@ -85,7 +85,7 @@ export default function HeroSection() {
           transition={{ delay: 0.28, duration: 0.6 }}
         >
           <a
-            href="http://localhost:5000/auth/github"
+            href="http://localhost:7000/auth/github"
             className="inline-flex items-center justify-center px-5 py-3 rounded-md bg-white text-black font-medium shadow-sm hover:shadow-lg transition transform hover:-translate-y-0.5 text-sm md:text-base"
           >
             Start Automating

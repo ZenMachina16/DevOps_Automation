@@ -8,10 +8,10 @@ const router = Router();
 router.get('/github', passport.authenticate('github', { scope: ['user:email', 'repo'] }));
 
 router.get('/callback', 
-  passport.authenticate('github', { failureRedirect: 'http://localhost:3000?error=auth_failed' }),
+  passport.authenticate('github', { failureRedirect: 'http://localhost:2000?error=auth_failed' }),
   (req, res) => {
     // Successful authentication, redirect to scan page
-    res.redirect('http://localhost:3000/scan?connected=true');
+    res.redirect('http://localhost:2000/scan?connected=true');
   }
 );
 

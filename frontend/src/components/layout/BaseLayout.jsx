@@ -46,7 +46,7 @@ export default function BaseLayout({ children }) {
           ))}
 
           <a
-  href="http://localhost:5000/auth/github"
+  href="http://localhost:7000/auth/github"
     className="inline-flex items-center px-5 py-2 
              bg-white text-gray-900 font-semibold rounded-lg
              border border-gray-300 transition-all transform"

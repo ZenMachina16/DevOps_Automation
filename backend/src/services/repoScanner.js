@@ -89,7 +89,60 @@ export async function fetchPackageJson({ owner, repo, branchCandidates = ['main'
 
 /**
  * -------------------------------
- * Main Gap Detector (UPGRADED)
+ * Fetch raw file content
+ * -------------------------------
+ */
+async function fetchRawFile({ owner, repo, path, branch }) {
+  const token = process.env.GITHUB_TOKEN;
+
+  const headers = {
+    Accept: 'application/vnd.github.raw+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+  const resp = await axios.get(url, { headers, validateStatus: () => true });
+
+  if (resp.status === 200) {
+    if (typeof resp.data === 'string') return resp.data;
+    if (resp.data?.content) {
+      return Buffer.from(resp.data.content, 'base64').toString('utf8');
+    }
+  }
+
+  return null;
+}
+
+/**
+ * -------------------------------
+ * Parse env variable names from env file
+ * -------------------------------
+ */
+function parseEnvFile(content) {
+  return content
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#') && line.includes('='))
+    .map(line => line.split('=')[0].trim());
+}
+
+/**
+ * -------------------------------
+ * Extract env vars from JS/TS code
+ * -------------------------------
+ */
+function extractEnvVarsFromCode(content) {
+  const matches = content.matchAll(/process\.env\.([A-Z0-9_]+)/g);
+  return Array.from(matches).map(m => m[1]);
+}
+
+/**
+ * -------------------------------
+ * Main Gap Detector (ENHANCED)
  * -------------------------------
  */
 export async function gapDetector(owner, repo, branch = 'main') {
@@ -140,6 +193,57 @@ export async function gapDetector(owner, repo, branch = 'main') {
   const frontendType = hasFrontend ? 'react' : null;
 
   /* -------------------------------
+     ENV VARIABLE DETECTION
+  -------------------------------- */
+  const envVars = new Set();
+
+  // 1️⃣ Explicit env files
+  const envExamplePath = paths.find(p =>
+    ['.env.example', '.env.sample'].includes(p.toLowerCase())
+  );
+
+  if (envExamplePath) {
+    const envContent = await fetchRawFile({
+      owner,
+      repo,
+      path: envExamplePath,
+      branch,
+    });
+
+    if (envContent) {
+      parseEnvFile(envContent).forEach(v => envVars.add(v));
+    }
+  }
+
+  // 2️⃣ Fallback: scan code for process.env.X
+  if (envVars.size === 0) {
+    const codeFiles = paths.filter(p =>
+      /\.(js|ts|jsx|tsx)$/.test(p) &&
+      !p.startsWith('node_modules/') &&
+      !p.startsWith('dist/') &&
+      !p.startsWith('build/')
+    );
+
+    for (const file of codeFiles.slice(0, 30)) {
+      const content = await fetchRawFile({
+        owner,
+        repo,
+        path: file,
+        branch,
+      });
+
+      if (content) {
+        extractEnvVarsFromCode(content).forEach(v => envVars.add(v));
+      }
+    }
+  }
+
+  // 3️⃣ Light inference
+  if (hasBackend) {
+    envVars.add('PORT');
+  }
+
+  /* -------------------------------
      GAP REPORT (RULE ENGINE INPUT)
   -------------------------------- */
   const gapReport = [];
@@ -171,6 +275,9 @@ export async function gapDetector(owner, repo, branch = 'main') {
 
     // Raw gaps for rule engine
     gapReport,
+
+    // 👇 NEW
+    envVars: Array.from(envVars),
   };
 }
 
