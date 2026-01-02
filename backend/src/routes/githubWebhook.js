@@ -1,175 +1,121 @@
-import { Router } from 'express';
-import axios from 'axios';
+// backend/src/routes/githubWebhook.js
+
+import { Router } from "express";
+import axios from "axios";
+import {
+  getLiveStageFromJob,
+  ingestCompletedWorkflowJob
+} from "../services/workflowRunIngestor.js";
 
 const router = Router();
 
-/**
- * POST /api/github/webhook
- * Handle GitHub webhook events for workflow runs and deployment status
- */
-router.post('/webhook', async (req, res) => {
+/* =====================================================
+   MAIN WEBHOOK ENDPOINT
+   ===================================================== */
+router.post("/webhook", async (req, res) => {
   try {
-    const { action, workflow_run, repository, pull_request } = req.body;
-    const eventType = req.headers['x-github-event'];
+    const eventType = req.headers["x-github-event"];
+    const { action } = req.body;
 
     console.log(`GitHub webhook received: ${eventType} - ${action}`);
 
-    // Handle workflow run completion
-    if (eventType === 'workflow_run' && action === 'completed') {
-      await handleWorkflowRunCompletion(workflow_run, repository);
+    /* =================================================
+       LIVE CI STAGE (workflow_job.in_progress)
+       ================================================= */
+    if (eventType === "workflow_job" && action === "in_progress") {
+      const job = req.body.workflow_job;
+      const repo = req.body.repository;
+
+      const stage = getLiveStageFromJob({ job });
+
+      console.log(
+        `🔄 LIVE CI STAGE | ${repo.full_name} | ${stage}`
+      );
     }
 
-    // Handle pull request events (for tracking PR creation)
-    if (eventType === 'pull_request' && action === 'opened') {
-      await handlePullRequestCreated(pull_request, repository);
+    /* =================================================
+       FINAL CLASSIFICATION (workflow_job.completed)
+       ================================================= */
+    if (eventType === "workflow_job" && action === "completed") {
+      await handleWorkflowJobCompletion(
+        req.body.workflow_job,
+        req.body.repository
+      );
     }
 
-    // Handle deployment status changes
-    if (eventType === 'deployment_status') {
-      await handleDeploymentStatus(req.body);
-    }
-
-    res.status(200).json({ received: true, eventType, action });
-  } catch (error) {
-    console.error('GitHub webhook error:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error("Webhook error:", err);
+    res.status(500).json({ error: "Webhook failure" });
   }
 });
 
-/**
- * Handle workflow run completion events
- */
-async function handleWorkflowRunCompletion(workflow_run, repository) {
+/* =====================================================
+   FINAL JOB COMPLETION HANDLER
+   ===================================================== */
+async function handleWorkflowJobCompletion(job, repository) {
+  console.log(
+    `Workflow job completed for ${repository.full_name}: ${job.conclusion}`
+  );
+
+  let classification;
+
   try {
-    const { conclusion, status, html_url, id } = workflow_run;
-    const repoFullName = repository.full_name;
+    classification = ingestCompletedWorkflowJob({ job });
 
-    console.log(`Workflow run completed for ${repoFullName}: ${conclusion} (${status})`);
+    console.log("🧠 ShipIQ classification:", classification);
+  } catch (err) {
+    console.error("Classification failed:", err.message);
+    return;
+  }
 
-    // If workflow failed, trigger retry logic via n8n
-    if (conclusion === 'failure') {
-      await triggerRetryWorkflow(repository, workflow_run);
-    }
+  // Retry ONLY if classifier allows it
+  if (job.conclusion === "failure" && classification.retryable) {
+    await triggerRetryWorkflow(repository, job, classification);
+  }
 
-    // Log successful deployments
-    if (conclusion === 'success') {
-      console.log(`✅ Deployment successful for ${repoFullName}`);
-      // Could trigger notifications, metrics, etc.
-    }
-
-  } catch (error) {
-    console.error('Error handling workflow run completion:', error);
+  if (job.conclusion === "success") {
+    console.log(`✅ CI job successful for ${repository.full_name}`);
   }
 }
 
-/**
- * Handle pull request creation
- */
-async function handlePullRequestCreated(pull_request, repository) {
+/* =====================================================
+   RETRY VIA N8N (CLASSIFIER-DRIVEN)
+   ===================================================== */
+async function triggerRetryWorkflow(repository, job, classification) {
   try {
-    const { number, title, html_url } = pull_request;
-    const repoFullName = repository.full_name;
-
-    console.log(`PR #${number} created for ${repoFullName}: ${title}`);
-
-    // Could trigger additional workflows, notifications, etc.
-    // For example, auto-approve if it's from ShipIQ
-
-  } catch (error) {
-    console.error('Error handling PR creation:', error);
-  }
-}
-
-/**
- * Handle deployment status changes
- */
-async function handleDeploymentStatus(deploymentData) {
-  try {
-    const { deployment, deployment_status, repository } = deploymentData;
-    const repoFullName = repository.full_name;
-    const status = deployment_status.state;
-
-    console.log(`Deployment status for ${repoFullName}: ${status}`);
-
-    if (status === 'failure') {
-      // Could trigger rollback or retry logic
-      console.log(`Deployment failed for ${repoFullName}, triggering analysis...`);
-    }
-
-  } catch (error) {
-    console.error('Error handling deployment status:', error);
-  }
-}
-
-/**
- * Trigger retry workflow in n8n when deployment fails
- */
-async function triggerRetryWorkflow(repository, workflow_run) {
-  try {
-    const n8nWebhookUrl = process.env.N8N_RETRY_WEBHOOK_URL ;
-    
-    const retryPayload = {
+    await axios.post(process.env.N8N_RETRY_WEBHOOK_URL, {
       repository: {
         owner: repository.owner.login,
         name: repository.name,
-        url: repository.html_url,
         fullName: repository.full_name
       },
-      workflow_run: {
-        id: workflow_run.id,
-        conclusion: workflow_run.conclusion,
-        status: workflow_run.status,
-        html_url: workflow_run.html_url,
-        logs_url: workflow_run.logs_url,
-        created_at: workflow_run.created_at,
-        updated_at: workflow_run.updated_at
+      job: {
+        id: job.id,
+        name: job.name,
+        conclusion: job.conclusion
       },
-      failure_analysis: {
-        conclusion: workflow_run.conclusion,
-        status: workflow_run.status,
-        failure_reason: workflow_run.conclusion === 'failure' ? 'Workflow execution failed' : 'Unknown'
-      },
-      retry_metadata: {
-        triggered_at: new Date().toISOString(),
-        trigger_reason: 'workflow_failure',
-        max_retries: 3
-      }
-    };
-
-    console.log('Triggering retry workflow for failed deployment...');
-    
-    const response = await axios.post(n8nWebhookUrl, retryPayload, {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      timeout: 30000
+      classification,
+      trigger: "classifier_retry",
+      triggeredAt: new Date().toISOString()
     });
 
-    console.log('Retry workflow triggered successfully:', response.status);
-    
-  } catch (error) {
-    console.error('Failed to trigger retry workflow:', error);
+    console.log("🔁 Retry triggered via n8n");
+  } catch (err) {
+    console.error("Retry trigger failed:", err.message);
   }
 }
 
-/**
- * GET /api/github/webhook/status
- * Check webhook configuration status
- */
-router.get('/webhook/status', (req, res) => {
+/* =====================================================
+   HEALTH CHECK
+   ===================================================== */
+router.get("/webhook/status", (req, res) => {
   res.json({
     configured: true,
-    webhookUrl: '/api/github/webhook',
-    supportedEvents: [
-      'workflow_run',
-      'pull_request', 
-      'deployment_status',
-      'deployment'
-    ],
-    retryWebhookUrl: process.env.N8N_RETRY_WEBHOOK_URL ,
+    webhookUrl: "/api/github/webhook",
+    supportedEvents: ["workflow_job"],
     timestamp: new Date().toISOString()
   });
 });
 
 export default router;
-

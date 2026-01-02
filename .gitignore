@@ -45,6 +45,7 @@ pids
 .env.test.local
 .env.production.local
 backend/.env
+backend/*.pem
 frontend/.env
 
 # -----------------------------
