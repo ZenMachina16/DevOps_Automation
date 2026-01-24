@@ -104,15 +104,16 @@ export default function LandingPage() {
               <a href="#faq" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors">
                 FAQ
               </a>
-             <button
+            <button
   onClick={() => {
-    console.log("🔗 Redirecting manually to GitHub OAuth...");
-    window.location.href = "http://localhost:7000/auth/github";
+    console.log("🔗 Redirecting to GitHub App install...");
+    window.location.href = "http://localhost:7000/auth/github-app/install";
   }}
   className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 hover:scale-105 transition-all duration-200 shadow-lg"
 >
-  Connect GitHub
+  Install GitHub App
 </button>
+
 
             </div>
           </div>
@@ -145,12 +146,13 @@ export default function LandingPage() {
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
                 <a
-                  href="http://localhost:7000/auth/github"
-                  className="inline-flex items-center px-8 py-4 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 transform hover:scale-105 transition-all duration-200 shadow-lg"
-                >
-                  Connect GitHub
-                  <ArrowRightIcon className="ml-2 h-5 w-5" />
-                </a>
+  href="http://localhost:7000/auth/github-app/install"
+  className="inline-flex items-center px-8 py-4 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 transform hover:scale-105 transition-all duration-200 shadow-lg"
+>
+  Install GitHub App
+  <ArrowRightIcon className="ml-2 h-5 w-5" />
+</a>
+
                 <button 
                   onClick={() => document.getElementById('how-it-works').scrollIntoView({ behavior: 'smooth' })}
                   className="inline-flex items-center px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 hover:scale-105 transition-all duration-200 shadow-lg"

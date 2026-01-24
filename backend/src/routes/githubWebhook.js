@@ -17,7 +17,15 @@ router.post("/webhook", async (req, res) => {
     const eventType = req.headers["x-github-event"];
     const { action } = req.body;
 
+    const installationId = req.body.installation?.id;
+
+    console.log("🔔 GitHub Webhook Received");
+    console.log("Event:", eventType);
+    console.log("Action:", action);
+    console.log("Installation ID:", installationId);
+
     console.log(`GitHub webhook received: ${eventType} - ${action}`);
+
 
     /* =================================================
        LIVE CI STAGE (workflow_job.in_progress)

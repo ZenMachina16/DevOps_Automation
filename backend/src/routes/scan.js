@@ -1,24 +1,57 @@
-import { Router } from 'express';
-import { generateGapReport } from '../services/repoScanner.js';
+import { Router } from "express";
+import { generateGapReport } from "../services/repoScanner.js";
+import { GitHubInstallation } from "../models/GitHubInstallation.js";
 
 const router = Router();
 
-router.post('/scan', async (req, res) => {
+/**
+ * POST /api/scan
+ * Expects:
+ * {
+ *   repoFullName: "owner/repo"
+ * }
+ */
+router.post("/scan", async (req, res) => {
   try {
-    const { repoUrl } = req.body ?? {};
-    if (!repoUrl || typeof repoUrl !== 'string') {
-      return res.status(400).json({ error: 'repoUrl is required' });
+    const { repoFullName } = req.body ?? {};
+
+    if (!repoFullName || typeof repoFullName !== "string") {
+      return res.status(400).json({ error: "repoFullName is required" });
     }
 
-    const report = await generateGapReport(repoUrl);
+    // 🔐 Must be logged in
+    if (!req.user) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const username =
+      req.user.profile?.username || req.user.profile?.login;
+
+    // 🔍 Find installation
+    const installation = await GitHubInstallation.findOne({
+      accountLogin: username,
+      suspended: false,
+    });
+
+    if (!installation) {
+      return res.status(403).json({
+        error: "GitHub App not installed for this user",
+      });
+    }
+
+    // 🔁 Canonical conversion
+    const repoUrl = `https://github.com/${repoFullName}.git`;
+
+    const report = await generateGapReport({
+      repoUrl,
+      installationId: installation.installationId,
+    });
+
     return res.json(report);
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Scan error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Scan error:", error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
 export default router;
-
-

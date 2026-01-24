@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
@@ -6,6 +6,8 @@ import BaseLayout from "./components/layout/BaseLayout";
 import LandingPage from "./pages/Landing/LandingPage.jsx";
 import Scan from "./pages/Scan.jsx";
 import api from "./api/axios.js";
+import Setup from "./pages/Setup.jsx";
+
 
 // ===============================
 // 🔒 Protected Route Wrapper
@@ -30,10 +32,8 @@ function ProtectedRoute({ children }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-slate-600 dark:text-slate-400">
-          Checking authentication...
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        Checking authentication...
       </div>
     );
   }
@@ -46,6 +46,30 @@ function ProtectedRoute({ children }) {
 }
 
 // ===============================
+// 🔁 GitHub App Setup Route
+// ===============================
+function GitHubSetupRedirect() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const installationId = params.get("installation_id");
+
+    console.log("GitHub installation_id:", installationId);
+
+    // Later you will send this to backend
+    // For now just continue to scan
+    navigate("/scan", { replace: true });
+  }, [navigate]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      Setting up GitHub integration...
+    </div>
+  );
+}
+
+// ===============================
 // 🌐 Main App Router
 // ===============================
 export default function App() {
@@ -55,9 +79,7 @@ export default function App() {
 
   return (
     <Routes>
-      {/* =============================== */}
-      {/* 🏠 Landing Page with BaseLayout */}
-      {/* =============================== */}
+      {/* 🏠 Landing Page */}
       <Route
         path="/"
         element={
@@ -65,7 +87,7 @@ export default function App() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeInOut" }}
+              transition={{ duration: 0.6 }}
             >
               <LandingPage />
             </motion.div>
@@ -73,9 +95,18 @@ export default function App() {
         }
       />
 
-      {/* ========================================== */}
-      {/* 🔐 Protected Scan Page (No BaseLayout Here) */}
-      {/* ========================================== */}
+      {/* 🔁 GitHub Setup Redirect */}
+      <Route
+  path="/setup"
+  element={
+    <ProtectedRoute>
+      <Setup />
+    </ProtectedRoute>
+  }
+/>
+
+
+      {/* 🔐 Protected Scan Page */}
       <Route
         path="/scan"
         element={
@@ -85,9 +116,7 @@ export default function App() {
         }
       />
 
-      {/* ====================== */}
-      {/* 🚫 Fallback Redirection */}
-      {/* ====================== */}
+      {/* 🚫 Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

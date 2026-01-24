@@ -1,86 +1,103 @@
-import { Router } from 'express';
-import passport from 'passport';
-import axios from 'axios';
+import { Router } from "express";
+import passport from "passport";
+import { GitHubInstallation } from "../models/GitHubInstallation.js";
 
 const router = Router();
 
-// GitHub OAuth routes
-router.get('/github', passport.authenticate('github', { scope: ['user:email', 'repo'] }));
+/**
+ * ▶ Start GitHub OAuth login
+ */
+router.get(
+  "/github",
+  passport.authenticate("github", {
+    scope: ["read:user", "user:email"],
+    prompt: "consent",
+  })
+);
 
-router.get('/callback', 
-  passport.authenticate('github', { failureRedirect: 'http://localhost:2000?error=auth_failed' }),
+/**
+ * ▶ OAuth callback
+ */
+router.get(
+  "/callback",
+  passport.authenticate("github", {
+    failureRedirect: "http://localhost:2000?error=auth_failed",
+  }),
   (req, res) => {
-    // Successful authentication, redirect to scan page
-    res.redirect('http://localhost:2000/scan?connected=true');
+    res.redirect("http://localhost:2000/scan");
   }
 );
 
-// Get current user info
-router.get('/user', (req, res) => {
-  console.log('Session:', req.session);
-  console.log('User:', req.user);
-  
+/**
+ * ▶ Logged-in user
+ */
+router.get("/user", (req, res) => {
   if (!req.user) {
-    return res.status(401).json({ error: 'Not authenticated' });
+    return res.status(401).json({ error: "Not authenticated" });
   }
-  
-  try {
-    // Handle the user data structure safely
-    const profile = req.user.profile || req.user;
-    const photos = profile.photos || profile._json?.avatar_url ? [{ value: profile._json.avatar_url }] : [];
-    
-    res.json({
-      username: profile.username || profile.login,
-      avatar: photos[0]?.value || profile._json?.avatar_url,
-      name: profile.displayName || profile.name || profile.login
+
+  const profile = req.user.profile;
+
+  res.json({
+    username: profile.username || profile.login,
+    name: profile.displayName || profile.login,
+    avatar:
+      profile.photos?.[0]?.value ||
+      profile._json?.avatar_url ||
+      null,
+  });
+});
+
+/**
+ * ▶ AUTH STATUS (SOURCE OF TRUTH)
+ * 🔑 MUST hydrate req.user.installationId
+ */
+router.get("/status", async (req, res) => {
+  if (!req.user) {
+    return res.json({
+      loggedIn: false,
+      hasInstallation: false,
+      installationId: null,
     });
-  } catch (error) {
-    console.error('Error in /user route:', error);
-    console.error('User object:', JSON.stringify(req.user, null, 2));
-    res.status(500).json({ error: 'Internal server error' });
+  }
+
+  const username =
+    req.user.profile?.username ||
+    req.user.profile?.login;
+
+  try {
+    const installation = await GitHubInstallation.findOne({
+      accountLogin: username,
+      suspended: false,
+    });
+
+    // 🔥 CRITICAL FIX — SESSION HYDRATION
+    if (installation) {
+      req.user.installationId = installation.installationId;
+    }
+
+    return res.json({
+      loggedIn: true,
+      hasInstallation: !!installation,
+      installationId: installation?.installationId || null,
+    });
+  } catch (err) {
+    console.error("❌ Auth status failed:", err);
+    return res.status(500).json({
+      loggedIn: true,
+      hasInstallation: false,
+      installationId: null,
+    });
   }
 });
 
-// Get user's repositories
-router.get('/repos', async (req, res) => {
-  if (!req.user || !req.user.accessToken) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-
-  try {
-    const response = await axios.get('https://api.github.com/user/repos', {
-      headers: { 
-        Authorization: `token ${req.user.accessToken}`,
-        'Accept': 'application/vnd.github+json'
-      },
-      params: {
-        sort: 'updated',
-        per_page: 100
-      }
-    });
-
-    const repos = response.data.map(repo => ({
-      id: repo.id,
-      name: repo.name,
-      fullName: repo.full_name,
-      private: repo.private,
-      description: repo.description,
-      url: repo.html_url,
-      updatedAt: repo.updated_at
-    }));
-
-    res.json(repos);
-  } catch (error) {
-    console.error('Failed to fetch repos:', error);
-    res.status(500).json({ error: 'Failed to fetch repositories' });
-  }
-});
-
-// Logout
-router.post('/logout', (req, res) => {
-  req.logout((err) => {
+/**
+ * ▶ Logout
+ */
+router.post("/logout", (req, res) => {
+  req.logout(err => {
     if (err) {
-      return res.status(500).json({ error: 'Logout failed' });
+      return res.status(500).json({ error: "Logout failed" });
     }
     res.json({ success: true });
   });
