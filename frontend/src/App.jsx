@@ -9,6 +9,7 @@ import api from "./api/axios.js";
 import Setup from "./pages/Setup.jsx";
 import Config from "./pages/Config.jsx";
 import Session from "./pages/Session.jsx";
+import RepoDetails from "./pages/RepoDetails.jsx";
 
 
 // ===============================
@@ -114,6 +115,16 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Scan />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 🔐 Protected Repo Details Page */}
+      <Route
+        path="/repo/:owner/:repoName"
+        element={
+          <ProtectedRoute>
+            <RepoDetails />
           </ProtectedRoute>
         }
       />

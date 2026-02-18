@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
-import { motion } from "framer-motion";
-import Button from "../components/ui/Button";
 import { io } from "socket.io-client";
 import { PlusIcon } from "@heroicons/react/24/outline";
 
@@ -13,52 +11,18 @@ export default function Scan() {
   // Core State
   // ===============================
   const [checkingStatus, setCheckingStatus] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [loggedIn, setLoggedIn] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [hasInstallation, setHasInstallation] = useState(false);
   // eslint-disable-next-line no-unused-vars
   const [installationId, setInstallationId] = useState(null);
 
   const [repositories, setRepositories] = useState([]);
-  const [selectedRepo, setSelectedRepo] = useState(null);
 
-  const [result, setResult] = useState(null);
-  const [loadingRepo, setLoadingRepo] = useState(null);
-  const [generating, setGenerating] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [error, setError] = useState("");
-
+  // Real-time status
   const [socket, setSocket] = useState(null);
   const [ciStatus, setCiStatus] = useState(null);
-
-  // ===============================
-  // Helpers
-  // ===============================
-  const calculateScore = (result) => {
-    if (!result) return 0;
-    const values = Object.values(result);
-    // Rough heuristic: count passing checks
-    // Assuming result values are booleans or strings that are truthy
-    const trueCount = [result.dockerfile, result.ci, result.readme, result.tests].filter(Boolean).length;
-    return Math.round((trueCount / 4) * 100);
-  };
-
-  const getRiskMeta = (score) => {
-    if (score >= 75)
-      return { label: "Healthy", color: "text-emerald-400" };
-    if (score >= 40)
-      return { label: "Moderate", color: "text-yellow-400" };
-    return { label: "Critical", color: "text-red-400" };
-  };
-
-  const buildChecks = (result) => {
-    if (!result) return [];
-    return [
-      { label: "Dockerfile", value: result.dockerfile },
-      { label: "CI/CD", value: result.ci },
-      { label: "README", value: result.readme },
-      { label: "Tests", value: result.tests },
-    ];
-  };
 
   const fetchRepositories = async () => {
     try {
@@ -114,13 +78,15 @@ export default function Scan() {
     return () => s.disconnect();
   }, []);
 
+  // Listen to all user repos
   useEffect(() => {
-    if (socket && selectedRepo) {
-      socket.emit("joinRepo", selectedRepo);
-      // Reset CI status when changing repos? Maybe keep it if relevant.
-      setCiStatus(null);
+    if (socket && repositories.length > 0) {
+      repositories.forEach(repo => {
+        socket.emit("joinRepo", repo.fullName);
+      });
     }
-  }, [socket, selectedRepo]);
+  }, [socket, repositories]);
+
 
   // ===============================
   // Actions
@@ -130,44 +96,10 @@ export default function Scan() {
     window.location.href = "/";
   };
 
-  const scanRepo = async (repoFullName) => {
-    setSelectedRepo(repoFullName);
-    setLoadingRepo(repoFullName);
-    setResult(null);
-
-    try {
-      const res = await api.post("/api/scan", { repoFullName });
-      setResult(res.data);
-    } catch (err) {
-      setError("Scan failed");
-    } finally {
-      setLoadingRepo(null);
-    }
+  const handleRepoClick = (repoFullName) => {
+    navigate(`/repo/${repoFullName}`);
   };
 
-  const onGenerateFiles = async () => {
-    if (!selectedRepo) return;
-    setGenerating(true);
-    setError("");
-
-    try {
-      // 1. Start generation session
-      const res = await api.post("/api/generate-files", {
-        repoFullName: selectedRepo,
-      });
-
-      if (res.data.success) {
-        // 2. Redirect to session page
-        navigate(`/session/${res.data.sessionId}`);
-      } else {
-        setError(res.data.error || "Generation failed");
-        setGenerating(false);
-      }
-    } catch {
-      setError("Generation failed");
-      setGenerating(false);
-    }
-  };
 
   if (checkingStatus) {
     return (
@@ -176,13 +108,6 @@ export default function Scan() {
       </div>
     );
   }
-
-  // Safe checks for rendering
-  const score = calculateScore(result);
-  const risk = getRiskMeta(score);
-  const checks = buildChecks(result);
-  // Determine if we should show the generate button (if any check is missing/false)
-  const hasMissing = checks.some((c) => !c.value);
 
   const totalRepos = repositories.length;
 
@@ -221,8 +146,8 @@ export default function Scan() {
         <div className="grid md:grid-cols-3 gap-6 mb-12">
           <MetricCard label="Total Repositories" value={totalRepos} />
           <MetricCard
-            label="Selected Repository"
-            value={selectedRepo || "None"}
+            label="Monitored Repos"
+            value={totalRepos}
           />
           <MetricCard
             label="Live CI Status"
@@ -253,97 +178,11 @@ export default function Scan() {
             <RepoCard
               key={repo.fullName}
               repo={repo}
-              loadingRepo={loadingRepo}
               ciStatus={ciStatus}
-              scanRepo={scanRepo}
-              isSelected={selectedRepo === repo.fullName}
+              onClick={handleRepoClick}
             />
           ))}
         </div>
-
-        {/* Result Panel */}
-        {result && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl"
-          >
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-2xl font-bold text-white">
-                {selectedRepo} Report
-              </h3>
-              <span className={`${risk.color} font-medium px-3 py-1 bg-slate-800 rounded-full border border-slate-700`}>
-                {risk.label} Risk
-              </span>
-            </div>
-
-            {/* CI Status Banner */}
-            {ciStatus && ciStatus.repo === selectedRepo && (
-              <div className="mb-8 p-5 rounded-xl bg-slate-800/50 border border-slate-700 animate-pulse">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <span className="h-3 w-3 rounded-full bg-blue-500 animate-ping"></span>
-                    <span className="text-lg font-semibold text-blue-200">
-                      CI Job Running: {ciStatus.name || "Workflow"}
-                    </span>
-                  </div>
-                  <span className="text-sm text-slate-400">
-                    Status: {ciStatus.status}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col md:flex-row gap-8">
-              {/* Score */}
-              <div className="flex-shrink-0 flex flex-col items-center justify-center p-6 bg-slate-800/30 rounded-2xl border border-slate-800 w-full md:w-64">
-                <div className="text-6xl font-bold text-emerald-400 mb-2">
-                  {score}%
-                </div>
-                <p className="text-slate-400 uppercase text-xs tracking-wider">Health Score</p>
-              </div>
-
-              {/* Checks */}
-              <div className="flex-grow grid md:grid-cols-2 gap-4">
-                {checks.map((check) => (
-                  <div
-                    key={check.label}
-                    className={`p-5 rounded-xl border flex items-center justify-between ${check.value
-                      ? "bg-emerald-900/10 border-emerald-900/50"
-                      : "bg-red-900/10 border-red-900/50"
-                      }`}
-                  >
-                    <div>
-                      <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">
-                        {check.label}
-                      </p>
-                    </div>
-                    <div className={`text-lg font-bold ${check.value ? "text-emerald-500" : "text-red-500"}`}>
-                      {check.value ? "PASSED" : "MISSING"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {hasMissing && (
-              <div className="mt-8 border-t border-slate-800 pt-8 flex justify-end">
-                <Button
-                  onClick={onGenerateFiles}
-                  disabled={generating}
-                  className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 text-lg shadow-lg shadow-purple-900/20"
-                >
-                  {generating
-                    ? "🤖 AI Agent Working..."
-                    : "✨ Auto-Fix Missing Components"}
-                </Button>
-              </div>
-            )}
-
-            {error && <p className="mt-4 text-red-400 text-right">{error}</p>}
-
-          </motion.div>
-        )}
       </div>
     </div>
   );
@@ -364,7 +203,7 @@ function MetricCard({ label, value }) {
   );
 }
 
-function RepoCard({ repo, loadingRepo, ciStatus, scanRepo, isSelected }) {
+function RepoCard({ repo, ciStatus, onClick }) {
   const isRunning =
     ciStatus?.repo === repo.fullName &&
     ciStatus.status === "in_progress";
@@ -378,17 +217,15 @@ function RepoCard({ repo, loadingRepo, ciStatus, scanRepo, isSelected }) {
     ciStatus.status === "failure";
 
   let borderColor = "border-slate-800";
-  if (isSelected) borderColor = "border-purple-500";
-  else if (isRunning) borderColor = "border-yellow-500";
+  if (isRunning) borderColor = "border-yellow-500";
   else if (isSuccess) borderColor = "border-emerald-500";
   else if (isFailure) borderColor = "border-red-500";
 
   return (
     <div
-      onClick={() => scanRepo(repo.fullName)}
+      onClick={() => onClick(repo.fullName)}
       className={`cursor-pointer p-6 rounded-2xl border transition-all duration-200
         bg-slate-900 hover:bg-slate-800/80 ${borderColor}
-        ${isSelected ? "ring-1 ring-purple-500 bg-slate-800" : ""}
       `}
     >
       <div className="flex justify-between items-start">
@@ -399,14 +236,7 @@ function RepoCard({ repo, loadingRepo, ciStatus, scanRepo, isSelected }) {
       </div>
 
       <p className="text-sm text-slate-500 mt-2 flex items-center gap-2">
-        {loadingRepo === repo.fullName ? (
-          <>
-            <span className="h-2 w-2 rounded-full bg-blue-400 animate-ping"></span>
-            Scanning...
-          </>
-        ) : (
-          "Click to analyze"
-        )}
+        Click to manage & scan
       </p>
     </div>
   );

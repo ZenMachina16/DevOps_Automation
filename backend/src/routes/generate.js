@@ -21,6 +21,7 @@ const router = Router();
  */
 import { v4 as uuidv4 } from 'uuid';
 import { GenerationSession } from "../models/GenerationSession.js";
+import { RepositoryConfig } from "../models/RepositoryConfig.js";
 
 router.post("/generate-files", async (req, res) => {
   try {
@@ -90,18 +91,22 @@ router.post("/generate-files", async (req, res) => {
         3.5️⃣ Fetch User Secrets (Decrypted)
         -------------------------------------------------- */
         let decryptedSecrets = {};
-        if (installationId) {
-          const installation = await GitHubInstallation.findOne({ installationId });
-          if (installation && installation.secrets) {
-            installation.secrets.forEach((s) => {
-              try {
-                const val = decrypt(s.encryptedValue, s.iv);
-                if (val) decryptedSecrets[s.key] = val;
-              } catch (e) {
-                console.error(`Failed to decrypt secret ${s.key}`, e);
-              }
-            });
-          }
+
+        // 1. Fetch Global/Installation Secrets (Optional, if you still want them as fallback)
+        // ... (Skipping for now to enforce Repo-Only isolation as requested)
+
+        // 2. Fetch Repo-Specific Secrets
+        const repoConfig = await RepositoryConfig.findOne({ fullName: repoFullName });
+        if (repoConfig && repoConfig.secrets) {
+          repoConfig.secrets.forEach((s) => {
+            try {
+              const val = decrypt(s.encryptedValue, s.iv);
+              if (val) decryptedSecrets[s.key] = val;
+            } catch (e) {
+              console.error(`Failed to decrypt repo secret ${s.key}`, e);
+            }
+          });
+          console.log(`🔐 Injected ${Object.keys(decryptedSecrets).length} REPO-SCOPED secrets into context`);
         }
 
         /* -------------------------------------------------

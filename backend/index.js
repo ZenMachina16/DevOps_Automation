@@ -15,6 +15,7 @@ import githubAppRoutes from "./src/routes/githubApp.js";
 import installationRoutes from "./src/routes/installation.js";
 import settingsRouter from "./src/routes/settings.js";
 import sessionRouter from "./src/routes/session.js";
+import repoRouter from "./src/routes/repository.js";
 
 import { connectMongo } from "./src/db/mongo.js";
 
@@ -132,6 +133,7 @@ app.use("/api", generateRouter);
 app.use("/api/github", githubWebhookRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api", sessionRouter);
+app.use("/api/repo", repoRouter);
 
 // ===============================
 // 🚀 Start server (IMPORTANT)
