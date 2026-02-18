@@ -118,8 +118,20 @@ app.use(passport.session());
 // ===============================
 // ❤️ Health
 // ===============================
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+import mongoose from "mongoose";
+
+app.get("/health", async (req, res) => {
+  const n8nUrl = process.env.N8N_WEBHOOK_URL;
+  const mongoStatus = mongoose.connection.readyState === 1 ? "ok" : "down";
+
+  res.json({
+    status: mongoStatus === "ok" ? "ok" : "critical",
+    services: {
+      database: mongoStatus,
+      n8n: n8nUrl ? "configured" : "missing_url",
+      github: process.env.GITHUB_CLIENT_ID ? "configured" : "missing_creds"
+    }
+  });
 });
 
 // ===============================
