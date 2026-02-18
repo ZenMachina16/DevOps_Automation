@@ -65,4 +65,26 @@ router.post("/link-installation", async (req, res) => {
   }
 });
 
+/**
+ * ===============================
+ * STEP 3: Redirect to GitHub App Configuration
+ * ===============================
+ */
+router.get("/configure", (req, res) => {
+  if (!req.user || !req.user.installationId) {
+    return res.status(401).json({ error: "Not authenticated or no installation found" });
+  }
+
+  const { installationId } = req.user;
+  const appSlug = process.env.GITHUB_APP_SLUG;
+
+  if (!appSlug) {
+    return res.status(500).json({ error: "GITHUB_APP_SLUG not configured" });
+  }
+
+  // Redirect to the GitHub App installation settings page
+  const configUrl = `https://github.com/apps/${appSlug}/installations/${installationId}`;
+  return res.redirect(configUrl);
+});
+
 export default router;

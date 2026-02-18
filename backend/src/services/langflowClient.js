@@ -30,6 +30,7 @@ export class N8nClient {
       scan: context.scan,
       gap_report: context.scan.gapReport,
       metadata: context.metadata || {},
+      secrets: context.secrets || {},
       workflow: {
         source: 'devops-platform',
         version: '1.0.0',

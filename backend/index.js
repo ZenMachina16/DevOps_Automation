@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as GitHubStrategy } from "passport-github2";
+import http from "http";
+import { Server } from "socket.io";
 
 import scanRouter from "./src/routes/scan.js";
 import authRouter from "./src/routes/auth.js";
@@ -11,6 +13,8 @@ import generateRouter from "./src/routes/generate.js";
 import githubWebhookRouter from "./src/routes/githubWebhook.js";
 import githubAppRoutes from "./src/routes/githubApp.js";
 import installationRoutes from "./src/routes/installation.js";
+import settingsRouter from "./src/routes/settings.js";
+import sessionRouter from "./src/routes/session.js";
 
 import { connectMongo } from "./src/db/mongo.js";
 
@@ -25,9 +29,36 @@ console.log("ENV CHECK:", {
 });
 
 // ===============================
-// 🚀 App
+// 🚀 App + HTTP Server
 // ===============================
 const app = express();
+const server = http.createServer(app);
+
+// ===============================
+// ⚡ Socket.IO Setup
+// ===============================
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:2000", // your frontend
+    credentials: true,
+  },
+});
+
+// Make io accessible inside routes
+app.set("io", io);
+
+io.on("connection", (socket) => {
+  console.log("⚡ WebSocket client connected");
+
+  socket.on("joinRepo", (repoFullName) => {
+    socket.join(repoFullName);
+    console.log(`📦 Client joined repo room: ${repoFullName}`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ WebSocket client disconnected");
+  });
+});
 
 // ===============================
 // 🔌 Mongo
@@ -99,11 +130,14 @@ app.use("/api/installation", installationRoutes);
 app.use("/api", scanRouter);
 app.use("/api", generateRouter);
 app.use("/api/github", githubWebhookRouter);
+app.use("/api/settings", settingsRouter);
+app.use("/api", sessionRouter);
 
 // ===============================
-// 🚀 Start server
+// 🚀 Start server (IMPORTANT)
 // ===============================
 const PORT = process.env.PORT ?? 7000;
-app.listen(PORT, () => {
+
+server.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);
 });

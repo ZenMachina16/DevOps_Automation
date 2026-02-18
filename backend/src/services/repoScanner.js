@@ -171,8 +171,37 @@ export async function gapDetector({
 
   const paths = tree.map((n) => n.path);
 
-  const hasBackend = paths.some((p) => p.startsWith("backend/"));
-  const hasFrontend = paths.some((p) => p.startsWith("frontend/"));
+  // Detect backend in folder
+  const hasBackendFolder = paths.some(
+    (p) => p === "backend" || p.startsWith("backend/")
+  );
+
+  // Detect backend at repo root (flat Node backend)
+  const hasRootBackend =
+    paths.includes("package.json") &&
+    paths.some((p) =>
+      /^(server|index|app|main)\.(js|ts)$/.test(p) ||
+      /^src\/(server|index|app|main)\.(js|ts)$/.test(p) ||
+      /^bin\/www$/.test(p)
+    );
+
+  // Final backend signal
+  const hasBackend = hasBackendFolder || hasRootBackend;
+
+  const hasFrontendFolder = paths.some(
+    (p) => p === "frontend" || p.startsWith("frontend/")
+  );
+
+  const hasRootFrontend =
+    paths.includes("package.json") &&
+    paths.some((p) =>
+      /^(vite|next|webpack)\.config\.(js|ts|mjs|cjs)$/.test(p) ||
+      /^src\/(App|index|main)\.(jsx|tsx|js|ts)$/.test(p) ||
+      /^public\/index\.html$/.test(p)
+    );
+
+  const hasFrontend = hasFrontendFolder || hasRootFrontend;
+
 
   const hasAnyDockerfile = paths.some((p) =>
     p.toLowerCase().endsWith("dockerfile")
@@ -238,13 +267,31 @@ export async function gapDetector({
   if (!hasTests) gapReport.push("missing_test_configuration");
   if (!hasReadme) gapReport.push("missing_readme");
 
+  // Detect backend path correctly
+  let backendPath = null;
+  if (hasBackend) {
+    backendPath = hasBackendFolder ? "backend/" : ""; // "" = repo root
+  }
+
+  let frontendPath = null;
+  if (hasFrontend) {
+    frontendPath = hasFrontendFolder ? "frontend/" : "";
+  }
+
+
   return {
     hasBackend,
     hasFrontend,
-    backendPath: hasBackend ? "backend/" : null,
-    frontendPath: hasFrontend ? "frontend/" : null,
+
+    hasBackendFolder,
+    hasFrontendFolder,
+
+    backendPath,
+    frontendPath,
+
     backendType: hasBackend ? "node" : null,
     frontendType: hasFrontend ? "react" : null,
+
     usesDocker: hasAnyDockerfile,
     usesGithubActions,
     hasReadme,
@@ -252,6 +299,8 @@ export async function gapDetector({
     gapReport,
     envVars: Array.from(envVars),
   };
+
+
 }
 
 /**

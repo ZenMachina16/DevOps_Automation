@@ -27,6 +27,13 @@ export async function upsertInstallation(data) {
  * Update repositories list
  * =====================================
  */
+// ... existing exports ...
+
+/**
+ * =====================================
+ * Update repositories list (Set)
+ * =====================================
+ */
 export async function updateInstallationRepos(installationId, repositories) {
   return GitHubInstallation.findOneAndUpdate(
     { installationId },
@@ -34,3 +41,30 @@ export async function updateInstallationRepos(installationId, repositories) {
     { new: true }
   );
 }
+
+/**
+ * =====================================
+ * Add repositories (Atomic)
+ * =====================================
+ */
+export async function addRepositories(installationId, reposToAdd) {
+  return GitHubInstallation.findOneAndUpdate(
+    { installationId },
+    { $addToSet: { repositories: { $each: reposToAdd } } },
+    { new: true }
+  );
+}
+
+/**
+ * =====================================
+ * Remove repositories (Atomic)
+ * =====================================
+ */
+export async function removeRepositories(installationId, reposToRemove) {
+  return GitHubInstallation.findOneAndUpdate(
+    { installationId },
+    { $pull: { repositories: { $in: reposToRemove } } },
+    { new: true }
+  );
+}
+
