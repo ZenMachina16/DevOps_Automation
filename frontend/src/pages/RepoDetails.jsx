@@ -1,20 +1,27 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import api from "../api/axios";
 import Button from "../components/ui/Button";
+import { motion } from "framer-motion";
 import {
-    CheckCircleIcon, XCircleIcon, PlusIcon, TrashIcon, LockClosedIcon
+    CheckCircleIcon, XCircleIcon, PlusIcon, TrashIcon, LockClosedIcon,
+    ArrowPathIcon, ClockIcon
 } from "@heroicons/react/24/outline";
 
 export default function RepoDetails() {
     const { owner, repoName } = useParams();
     const repoFullName = `${owner}/${repoName}`;
-    const navigate = useNavigate();
 
+    // ===============================
     // State
+    // ===============================
     const [loading, setLoading] = useState(true);
     const [scanResult, setScanResult] = useState(null);
     const [secrets, setSecrets] = useState([]);
+    const [activeSession, setActiveSession] = useState(null);
+
+    // Helper State
+    const [scanning, setScanning] = useState(false);
 
     // Secrets Form
     const [newKey, setNewKey] = useState("");
@@ -26,19 +33,21 @@ export default function RepoDetails() {
     const [genError, setGenError] = useState("");
 
     // ===============================
-    // Fetch Data
+    // 1. Initial Data Load
     // ===============================
     useEffect(() => {
-        const loadData = async () => {
+        const loadRepoData = async () => {
             try {
                 setLoading(true);
-                // 1. Run a fresh scan (or fetch last scan if we stored it)
-                const scanRes = await api.post("/api/scan", { repoFullName });
-                setScanResult(scanRes.data);
+                // Use the unified endpoint!
+                const res = await api.get(`/api/repo/${owner}/${repoName}`);
 
-                // 2. Fetch Secrets
-                const secretsRes = await api.get(`/api/repo/${owner}/${repoName}/secrets`);
-                setSecrets(secretsRes.data);
+                setScanResult(res.data.lastScan);
+                setSecrets(res.data.secrets);
+
+                if (res.data.activeSession) {
+                    setActiveSession(res.data.activeSession);
+                }
 
             } catch (err) {
                 console.error("Failed to load repo details", err);
@@ -46,12 +55,52 @@ export default function RepoDetails() {
                 setLoading(false);
             }
         };
-        loadData();
+        loadRepoData();
     }, [repoFullName, owner, repoName]);
+
+    // ===============================
+    // 2. Poll Active Session
+    // ===============================
+    useEffect(() => {
+        let interval;
+        if (activeSession && ["GENERATING", "CODE_CREATED", "PR_OPEN", "PR_MERGED", "CI_RUNNING"].includes(activeSession.status)) {
+            interval = setInterval(async () => {
+                try {
+                    const res = await api.get(`/api/session/${activeSession.sessionId}`);
+                    setActiveSession(res.data);
+
+                    // If finished, refresh scan results to show green checks!
+                    if (["COMPLETED", "FAILED"].includes(res.data.status)) {
+                        // Reload repo data after short delay to ensure backend updated
+                        setTimeout(async () => {
+                            const repoRes = await api.get(`/api/repo/${owner}/${repoName}`);
+                            setScanResult(repoRes.data.lastScan);
+                        }, 2000);
+                    }
+                } catch (e) {
+                    console.error("Polling failed", e);
+                }
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [activeSession, owner, repoName]);
+
 
     // ===============================
     // Actions
     // ===============================
+    const handleManualScan = async () => {
+        setScanning(true);
+        try {
+            const res = await api.post("/api/scan", { repoFullName });
+            setScanResult(res.data);
+        } catch (err) {
+            alert("Scan failed");
+        } finally {
+            setScanning(false);
+        }
+    };
+
     const handleAddSecret = async (e) => {
         e.preventDefault();
         if (!newKey || !newValue) return;
@@ -63,11 +112,9 @@ export default function RepoDetails() {
                 value: newValue
             });
 
-            // Refresh list
             const res = await api.get(`/api/repo/${owner}/${repoName}/secrets`);
             setSecrets(res.data);
 
-            // Reset form
             setNewKey("");
             setNewValue("");
         } catch (err) {
@@ -97,38 +144,52 @@ export default function RepoDetails() {
             });
 
             if (res.data.success) {
-                navigate(`/session/${res.data.sessionId}`);
+                // Automatically switch view via state
+                setActiveSession({
+                    sessionId: res.data.sessionId,
+                    status: "GENERATING",
+                    repoFullName
+                });
             } else {
                 setGenError(res.data.error || "Generation failed");
-                setGenerating(false);
             }
         } catch {
             setGenError("Generation failed");
+        } finally {
             setGenerating(false);
         }
     };
 
     // ===============================
-    // Helpers
+    // UI Helpers (Session)
     // ===============================
-    const calculateScore = (result) => {
-        if (!result) return 0;
-        const trueCount = [result.dockerfile, result.ci, result.readme, result.tests].filter(Boolean).length;
-        return Math.round((trueCount / 4) * 100);
+    const getStepStatus = (step) => {
+        if (!activeSession) return "waiting";
+        const status = activeSession.status;
+        const steps = ["GENERATING", "CODE_CREATED", "PR_OPEN", "PR_MERGED", "CI_RUNNING", "COMPLETED"];
+        const currentIndex = steps.indexOf(status);
+        const stepIndex = steps.indexOf(step);
+
+        if (status === "FAILED") return "error";
+        if (stepIndex < currentIndex) return "completed";
+        if (stepIndex === currentIndex) return "active";
+        return "waiting";
     };
 
-    const checks = scanResult ? [
-        { label: "Dockerfile", value: scanResult.dockerfile },
-        { label: "CI/CD", value: scanResult.ci },
-        { label: "README", value: scanResult.readme },
-        { label: "Tests", value: scanResult.tests },
-    ] : [];
+    // ===============================
+    // Render
+    // ===============================
 
     if (loading) {
-        return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading Repository...</div>;
+        return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading Configuration...</div>;
     }
 
-    const score = calculateScore(scanResult);
+    // Calculate Score
+    const trueCount = scanResult ? [scanResult.dockerfile, scanResult.ci, scanResult.readme, scanResult.tests].filter(Boolean).length : 0;
+    const score = Math.round((trueCount / 4) * 100);
+
+    // If session is complete/failed, we show it as a "Recent Activity" block but revert to health view
+    const showActiveSession = activeSession && !["COMPLETED", "FAILED"].includes(activeSession.status);
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200">
@@ -140,52 +201,110 @@ export default function RepoDetails() {
                 </div>
             </nav>
 
-            <div className="max-w-5xl mx-auto p-8">
+            <div className="max-w-6xl mx-auto p-8">
 
                 {/* Header */}
                 <div className="flex justify-between items-start mb-10">
                     <div>
                         <h1 className="text-3xl font-bold text-white mb-2">{repoFullName}</h1>
-                        <p className="text-slate-400">Repository Configuration & Health</p>
+                        <p className="text-slate-400 flex items-center gap-2">
+                            Repository Configuration & Health
+                            <button onClick={handleManualScan} disabled={scanning} className="text-emerald-500 hover:text-emerald-400" title="Re-scan now">
+                                <ArrowPathIcon className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
+                            </button>
+                        </p>
                     </div>
                     <div className="text-right">
-                        <div className="text-4xl font-bold text-emerald-400">{score}%</div>
+                        <div className={`text-4xl font-bold ${score === 100 ? 'text-emerald-400' : 'text-yellow-400'}`}>{score}%</div>
                         <div className="text-xs text-slate-500 uppercase">Health Score</div>
                     </div>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-8">
 
-                    {/* LEFT COL: Health Check */}
+                    {/* LEFT COL: Health Check OR Active Session */}
                     <div className="md:col-span-2 space-y-8">
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                            <h3 className="text-lg font-semibold text-white mb-4">Health Status</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                {checks.map((check) => (
-                                    <div key={check.label} className={`p-4 rounded-xl border flex justify-between items-center ${check.value ? 'bg-emerald-900/10 border-emerald-900/50' : 'bg-red-900/10 border-red-900/50'}`}>
-                                        <span className="text-slate-300">{check.label}</span>
-                                        {check.value
-                                            ? <CheckCircleIcon className="h-6 w-6 text-emerald-500" />
-                                            : <XCircleIcon className="h-6 w-6 text-red-500" />
-                                        }
-                                    </div>
-                                ))}
-                            </div>
 
-                            <div className="mt-8 border-t border-slate-800 pt-6">
-                                {genError && <p className="text-red-400 text-sm mb-4">{genError}</p>}
-                                <Button
-                                    onClick={onGenerateFiles}
-                                    disabled={generating}
-                                    className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-medium shadow-lg shadow-purple-900/20"
-                                >
-                                    {generating ? "Starting AI Agent..." : "✨ Auto-Fix & Generate Files"}
-                                </Button>
-                                <p className="text-xs text-center text-slate-500 mt-2">
-                                    This will trigger n8n using the secrets defined below.
-                                </p>
+                        {showActiveSession ? (
+                            // 🔄 ACTIVE SESSION VIEW
+                            <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-6 shadow-2xl shadow-purple-900/10">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                        <span className="relative flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
+                                        </span>
+                                        Auto-Fix in Progress
+                                    </h3>
+                                    <span className="text-xs font-mono text-slate-500">{activeSession.sessionId}</span>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <SessionStep title="AI Generation" status={getStepStatus("GENERATING")} />
+                                    <SessionStep title="Code Review" status={getStepStatus("CODE_CREATED")}
+                                        info={activeSession.generatedFiles && Object.keys(activeSession.generatedFiles).length > 0 ? `${Object.keys(activeSession.generatedFiles).length} files` : null} />
+
+                                    {/* Code Preview */}
+                                    {activeSession.generatedFiles && Object.keys(activeSession.generatedFiles).length > 0 && (
+                                        <div className="bg-slate-950 rounded border border-slate-800 p-3 max-h-48 overflow-y-auto">
+                                            {Object.entries(activeSession.generatedFiles).map(([k, v]) => (
+                                                <div key={k} className="mb-2">
+                                                    <div className="text-xs text-emerald-400 font-mono mb-1">{k}</div>
+                                                    <div className="text-[10px] text-slate-500 truncate">{v.substring(0, 100)}...</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <SessionStep title="Pull Request" status={getStepStatus("PR_OPEN")}
+                                        link={activeSession.prUrl} />
+                                    <SessionStep title="CI/CD Pipeline" status={getStepStatus("CI_RUNNING")} />
+                                    <SessionStep title="Deployment Ready" status={getStepStatus("COMPLETED")} />
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            // ✅ STATIC HEALTH CHECK VIEW
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                <h3 className="text-lg font-semibold text-white mb-4">Current Status</h3>
+
+                                {!scanResult && !scanning && (
+                                    <div className="text-center py-10 text-slate-500">
+                                        No scan data available.
+                                        <br />
+                                        <button onClick={handleManualScan} className="text-purple-400 underline mt-2">Run Scan</button>
+                                    </div>
+                                )}
+
+                                {(scanResult || scanning) && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {['Dockerfile', 'CI', 'README', 'Tests'].map((label) => {
+                                            const key = label.toLowerCase().replace('ci', 'ci'); // 'ci' stays 'ci'
+                                            const val = scanResult ? scanResult[key === 'ci' ? 'ci' : key.toLowerCase()] : false;
+                                            return (
+                                                <div key={label} className={`p-4 rounded-xl border flex justify-between items-center ${val ? 'bg-emerald-900/10 border-emerald-900/50' : 'bg-red-900/10 border-red-900/50'}`}>
+                                                    <span className="text-slate-300">{label}</span>
+                                                    {val
+                                                        ? <CheckCircleIcon className="h-6 w-6 text-emerald-500" />
+                                                        : <XCircleIcon className="h-6 w-6 text-red-500" />
+                                                    }
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div className="mt-8 border-t border-slate-800 pt-6">
+                                    {genError && <p className="text-red-400 text-sm mb-4">{genError}</p>}
+                                    <Button
+                                        onClick={onGenerateFiles}
+                                        disabled={generating || scanning}
+                                        className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-medium shadow-lg shadow-purple-900/20 disabled:opacity-50"
+                                    >
+                                        {generating ? "Starting AI Agent..." : "✨ Auto-Fix Missing Components"}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* RIGHT COL: Secrets Vault */}
@@ -195,7 +314,7 @@ export default function RepoDetails() {
                                 <LockClosedIcon className="h-5 w-5 text-yellow-500" />
                                 <h3 className="text-lg font-semibold text-white">Secrets Vault</h3>
                             </div>
-                            <p className="text-xs text-slate-500 mb-6">Environment variables for this repository (e.g. API Keys, DB URLs).</p>
+                            <p className="text-xs text-slate-500 mb-6">Environment variables for this repository.</p>
 
                             {/* List Secrets */}
                             <div className="space-y-3 mb-6">
@@ -242,6 +361,38 @@ export default function RepoDetails() {
 
                 </div>
             </div>
+        </div>
+    );
+}
+
+// Sub-component for Session Steps
+function SessionStep({ title, status, link, info }) {
+    let icon = <div className="h-4 w-4 rounded-full bg-slate-700 border border-slate-600" />;
+    let color = "text-slate-500";
+    let bg = "bg-slate-900/50";
+
+    if (status === "completed") {
+        icon = <CheckCircleIcon className="h-5 w-5 text-emerald-500" />;
+        color = "text-emerald-400";
+        bg = "bg-emerald-900/10 border-emerald-900/30";
+    } else if (status === "active") {
+        icon = <ClockIcon className="h-5 w-5 text-blue-500 animate-spin" />;
+        color = "text-blue-400";
+        bg = "bg-blue-900/10 border-blue-900/30";
+    } else if (status === "error") {
+        icon = <XCircleIcon className="h-5 w-5 text-red-500" />;
+        color = "text-red-400";
+        bg = "bg-red-900/10 border-red-900/30";
+    }
+
+    return (
+        <div className={`flex items-center justify-between p-3 rounded-lg border border-transparent ${bg}`}>
+            <div className="flex items-center gap-3">
+                {icon}
+                <span className={`font-medium ${color}`}>{title}</span>
+            </div>
+            {link && <a href={link} target="_blank" className="text-xs underline text-blue-400">View</a>}
+            {info && <span className="text-xs text-slate-500">{info}</span>}
         </div>
     );
 }

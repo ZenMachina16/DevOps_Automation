@@ -2,6 +2,7 @@ import { Router } from "express";
 import { RepositoryConfig } from "../models/RepositoryConfig.js";
 import { encrypt, decrypt } from "../services/secretsService.js";
 import { GitHubInstallation } from "../models/GitHubInstallation.js";
+import { GenerationSession } from "../models/GenerationSession.js";
 
 const router = Router();
 
@@ -37,7 +38,43 @@ const checkRepoAccess = async (req, res, next) => {
 };
 
 /* ========================================================
-   1. GET SECRETS (Names only or masked values)
+   1. GET REPO DETAILS (Config + Last Scan + Active Session)
+   ======================================================== */
+router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
+    try {
+        const config = await RepositoryConfig.findOne({ fullName: req.repoFullName });
+
+        // Check for active session (not completed/failed)
+        const activeSession = await GenerationSession.findOne({
+            repoFullName: req.repoFullName,
+            status: { $nin: ["COMPLETED", "FAILED"] }
+        }).sort({ createdAt: -1 });
+
+        // Get secrets safely
+        const secrets = config?.secrets?.map(s => ({
+            key: s.key,
+            updatedAt: s.updatedAt,
+        })) || [];
+
+        res.json({
+            fullName: req.repoFullName,
+            secrets,
+            lastScan: config?.lastScan || null,
+            activeSession: activeSession ? {
+                sessionId: activeSession.sessionId,
+                status: activeSession.status,
+                createdAt: activeSession.createdAt
+            } : null
+        });
+
+    } catch (err) {
+        console.error("Get repo details failed", err);
+        res.status(500).json({ error: "Failed to fetch repository details" });
+    }
+});
+
+/* ========================================================
+   2. GET SECRETS (Names only or masked values)
    ======================================================== */
 router.get("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
     try {

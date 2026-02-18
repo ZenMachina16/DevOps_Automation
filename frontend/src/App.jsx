@@ -8,7 +8,6 @@ import Scan from "./pages/Scan.jsx";
 import api from "./api/axios.js";
 import Setup from "./pages/Setup.jsx";
 import Config from "./pages/Config.jsx";
-import Session from "./pages/Session.jsx";
 import RepoDetails from "./pages/RepoDetails.jsx";
 
 
@@ -129,15 +128,7 @@ export default function App() {
         }
       />
 
-      {/* 🔐 Protected Session Page */}
-      <Route
-        path="/session/:sessionId"
-        element={
-          <ProtectedRoute>
-            <Session />
-          </ProtectedRoute>
-        }
-      />
+
 
       {/* 🔐 Protected Config Page */}
       <Route

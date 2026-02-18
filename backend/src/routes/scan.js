@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { generateGapReport } from "../services/repoScanner.js";
 import { GitHubInstallation } from "../models/GitHubInstallation.js";
+import { RepositoryConfig } from "../models/RepositoryConfig.js";
 
 const router = Router();
 
@@ -46,6 +47,25 @@ router.post("/scan", async (req, res) => {
       repoUrl,
       installationId: installation.installationId,
     });
+
+    // 💾 SAVE SCAN RESULT
+    await RepositoryConfig.findOneAndUpdate(
+      { fullName: repoFullName },
+      {
+        $set: {
+          fullName: repoFullName,
+          installationId: installation.installationId,
+          lastScan: {
+            dockerfile: report.dockerfile,
+            ci: report.ci,
+            readme: report.readme,
+            tests: report.tests,
+            scannedAt: new Date()
+          }
+        }
+      },
+      { upsert: true, new: true }
+    );
 
     return res.json(report);
   } catch (error) {
