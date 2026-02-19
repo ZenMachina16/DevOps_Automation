@@ -7,6 +7,8 @@ import LandingPage from "./pages/Landing/LandingPage.jsx";
 import Scan from "./pages/Scan.jsx";
 import api from "./api/axios.js";
 import Setup from "./pages/Setup.jsx";
+import Config from "./pages/Config.jsx";
+import RepoDetails from "./pages/RepoDetails.jsx";
 
 
 // ===============================
@@ -97,13 +99,13 @@ export default function App() {
 
       {/* 🔁 GitHub Setup Redirect */}
       <Route
-  path="/setup"
-  element={
-    <ProtectedRoute>
-      <Setup />
-    </ProtectedRoute>
-  }
-/>
+        path="/setup"
+        element={
+          <ProtectedRoute>
+            <Setup />
+          </ProtectedRoute>
+        }
+      />
 
 
       {/* 🔐 Protected Scan Page */}
@@ -112,6 +114,28 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Scan />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 🔐 Protected Repo Details Page */}
+      <Route
+        path="/repo/:owner/:repoName"
+        element={
+          <ProtectedRoute>
+            <RepoDetails />
+          </ProtectedRoute>
+        }
+      />
+
+
+
+      {/* 🔐 Protected Config Page */}
+      <Route
+        path="/config"
+        element={
+          <ProtectedRoute>
+            <Config />
           </ProtectedRoute>
         }
       />

@@ -32,7 +32,16 @@ const GitHubInstallationSchema = new mongoose.Schema({
   suspended: {
     type: Boolean,
     default: false
-  }
+  },
+
+  secrets: [
+    {
+      key: { type: String, required: true },
+      encryptedValue: { type: String, required: true },
+      iv: { type: String, required: true },
+      updatedAt: { type: Date, default: Date.now }
+    }
+  ]
 });
 
 export const GitHubInstallation =

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { GitHubInstallation } from "../models/GitHubInstallation.js";
 import { fetchInstallationRepos } from "../services/githubAppAuth.js";
 import { updateInstallationRepos } from "../services/installationService.js";
+import { RepositoryConfig } from "../models/RepositoryConfig.js";
 
 const router = Router();
 
@@ -31,9 +32,35 @@ router.get("/repos", async (req, res) => {
     });
   }
 
-  const repos = installation.repositories.map((fullName) => ({
-    fullName,
-  }));
+  // Fetch scan statuses for all these repos
+  const configs = await RepositoryConfig.find({
+    fullName: { $in: installation.repositories }
+  });
+
+  // Create lookup map
+  const configMap = {};
+  configs.forEach(c => {
+    configMap[c.fullName] = c;
+  });
+
+  const repos = installation.repositories.map((fullName) => {
+    const config = configMap[fullName];
+    const scan = config?.lastScan;
+
+    // Determine health status
+    let isHealthy = false;
+    if (scan) {
+      // Example logic: Healthy if at least Dockerfile + CI exists
+      isHealthy = Boolean(scan.dockerfile && scan.ci);
+    }
+
+    return {
+      fullName,
+      private: false, // We need to sync this from GitHub properly later, defaulting for now
+      health: isHealthy ? "healthy" : "at_risk",
+      lastScan: scan
+    };
+  });
 
   res.json(repos);
 });
