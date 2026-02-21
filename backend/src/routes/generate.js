@@ -10,41 +10,24 @@ import { decrypt } from "../services/secretsService.js";
 import { v4 as uuidv4 } from "uuid";
 import { GenerationSession } from "../models/GenerationSession.js";
 import { RepositoryConfig } from "../models/RepositoryConfig.js";
+import { calculateMaturity } from "../services/maturityCalculator.js";
 
 const router = Router();
 
-/**
- * POST /api/generate-files
- * Body:
- * {
- *   repoFullName: "owner/repo"
- * }
- */
 router.post("/generate-files", async (req, res) => {
   try {
     const { repoFullName } = req.body ?? {};
 
-    if (!repoFullName || typeof repoFullName !== "string") {
+    if (!repoFullName) {
       return res.status(400).json({
         success: false,
         error: "repoFullName is required",
       });
     }
 
-    /* ======================================================
-       🔐 Resolve GitHub Installation (FIXED VERSION)
-       ====================================================== */
-
     const username =
       req.user?.profile?.username ||
       req.user?.profile?.login;
-
-    if (!username) {
-      return res.status(401).json({
-        success: false,
-        error: "User authentication missing profile",
-      });
-    }
 
     const installation = await GitHubInstallation.findOne({
       accountLogin: username,
@@ -59,26 +42,10 @@ router.post("/generate-files", async (req, res) => {
     }
 
     const installationId = installation.installationId;
-
-    /* ======================================================
-       📦 Prepare Repo
-       ====================================================== */
-
     const repoUrl = `https://github.com/${repoFullName}.git`;
-    console.log(`🚀 DevOps generation started for: ${repoUrl}`);
-
     const parsed = parseGitHubUrl(repoUrl);
-    if (!parsed) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid GitHub repository",
-      });
-    }
 
-    /* ======================================================
-       🆕 Create Session
-       ====================================================== */
-
+    // 🔥 Create correlation ID
     const sessionId = uuidv4();
 
     await GenerationSession.create({
@@ -87,28 +54,21 @@ router.post("/generate-files", async (req, res) => {
       status: "GENERATING",
     });
 
-    console.log(`✅ Created session ${sessionId}`);
-
-    /* ======================================================
-       🔁 Background Processing
-       ====================================================== */
-
+    // Run generation in background
     (async () => {
       try {
-        /* 1️⃣ Scan Repository */
         const scanResult = await generateGapReport({
           repoUrl,
           installationId,
+          branch: "main",
         });
 
-        /* 2️⃣ Fetch Metadata */
         const metadata = await fetchPackageJson({
           owner: parsed.owner,
           repo: parsed.repo,
           installationId,
         });
 
-        /* 3️⃣ Load & Decrypt Repo Secrets */
         let decryptedSecrets = {};
 
         const repoConfig = await RepositoryConfig.findOne({
@@ -120,15 +80,12 @@ router.post("/generate-files", async (req, res) => {
             try {
               const val = decrypt(s.encryptedValue, s.iv);
               if (val) decryptedSecrets[s.key] = val;
-            } catch (e) {
-              console.error(`Secret decrypt failed: ${s.key}`);
-            }
+            } catch {}
           });
         }
 
-        /* 4️⃣ Build Payload */
-        const payloadForN8n = {
-          sessionId,
+        // 🔥 Context object WITHOUT sessionId
+        const contextForN8n = {
           repository: {
             owner: parsed.owner,
             name: parsed.repo,
@@ -136,26 +93,52 @@ router.post("/generate-files", async (req, res) => {
             url: repoUrl,
             defaultBranch: "main",
           },
-          project: {
-            language: "JavaScript",
-            manifestFilename: "package.json",
-            description:
-              metadata?.description ||
-              `${parsed.repo} application repository`,
-            dependencies: metadata?.dependencies || {},
-            scripts: metadata?.scripts || {},
-          },
           scan: scanResult,
-          gap_report: scanResult?.gapReport,
           metadata,
           secrets: decryptedSecrets,
         };
 
-        /* 5️⃣ Send to n8n */
-        await n8nClient.generateFiles(payloadForN8n);
+        // 🔥 Pass sessionId separately (CRITICAL FIX)
+        const result = await n8nClient.generateFiles(
+          contextForN8n,
+          sessionId
+        );
 
-      } catch (bgError) {
-        console.error("❌ Background generation failed:", bgError);
+        // Optional immediate branch handling if n8n returns it
+        const generatedBranch = result?.branchName;
+
+        if (generatedBranch) {
+          const demoRaw = await generateGapReport({
+            repoUrl,
+            installationId,
+            branch: generatedBranch,
+          });
+
+          const demoMaturity = calculateMaturity(demoRaw);
+
+          await RepositoryConfig.updateOne(
+            { fullName: repoFullName },
+            {
+              $set: {
+                lastScanDemo: {
+                  raw: demoRaw,
+                  maturity: demoMaturity,
+                  scannedAt: new Date(),
+                  branch: generatedBranch,
+                },
+                demoBranch: generatedBranch,
+              },
+            }
+          );
+        }
+
+        await GenerationSession.updateOne(
+          { sessionId },
+          { status: "COMPLETED" }
+        );
+
+      } catch (err) {
+        console.error("Generation background error:", err);
 
         await GenerationSession.updateOne(
           { sessionId },
@@ -164,45 +147,16 @@ router.post("/generate-files", async (req, res) => {
       }
     })();
 
-    /* ======================================================
-       🚀 Immediate Response
-       ====================================================== */
-
     return res.json({
       success: true,
       sessionId,
       repoFullName,
-      message: "Generation started in background",
-      timestamp: new Date().toISOString(),
     });
 
   } catch (error) {
-    console.error("❌ DevOps file generation trigger failed:", error);
-
+    console.error("Generate error:", error);
     return res.status(500).json({
       success: false,
-      error: error.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
-
-/**
- * GET /api/generate-status
- */
-router.get("/generate-status", async (_req, res) => {
-  try {
-    const webhookUrl = process.env.N8N_WEBHOOK_URL;
-
-    return res.json({
-      configured: Boolean(webhookUrl),
-      service: "n8n",
-      webhookUrl,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    return res.status(500).json({
-      configured: false,
       error: error.message,
     });
   }

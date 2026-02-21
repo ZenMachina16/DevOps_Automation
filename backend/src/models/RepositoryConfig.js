@@ -1,5 +1,42 @@
 import mongoose from "mongoose";
 
+/* ======================================================
+   🔹 Reusable Scan SubSchema
+====================================================== */
+const ScanSchema = new mongoose.Schema(
+  {
+    raw: {
+      dockerfile: { type: Boolean, default: false },
+      ci: { type: Boolean, default: false },
+      readme: { type: Boolean, default: false },
+      tests: { type: Boolean, default: false },
+    },
+
+    maturity: {
+      totalScore: { type: Number, default: 0 },
+      maxScore: { type: Number, default: 100 },
+
+      categories: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+    },
+
+    scannedAt: {
+      type: Date,
+    },
+
+    branch: {
+      type: String,
+      default: "main",
+    },
+  },
+  { _id: false }
+);
+
+/* ======================================================
+   🔹 Repository Schema
+====================================================== */
 const RepositorySchema = new mongoose.Schema(
   {
     fullName: {
@@ -13,7 +50,9 @@ const RepositorySchema = new mongoose.Schema(
       required: true,
     },
 
-    // 🔐 Encrypted secrets specific to this repo
+    /* ==================================================
+       🔐 Encrypted Repo-Specific Secrets
+    ================================================== */
     secrets: [
       {
         key: { type: String, required: true },
@@ -23,29 +62,37 @@ const RepositorySchema = new mongoose.Schema(
       },
     ],
 
-    // 📊 Structured scan result
+    /* ==================================================
+       📊 Production Scan (main branch)
+    ================================================== */
+    lastScanProduction: {
+      type: ScanSchema,
+      default: null,
+    },
+
+    /* ==================================================
+       🎭 Demo Scan (generated branch)
+    ================================================== */
+    lastScanDemo: {
+      type: ScanSchema,
+      default: null,
+    },
+
+    /* ==================================================
+       🔀 Currently Active Demo Branch
+    ================================================== */
+    demoBranch: {
+      type: String,
+      default: null,
+    },
+
+    /* ==================================================
+       🗂 Backward Compatibility (Optional)
+       You may remove later if unused
+    ================================================== */
     lastScan: {
-      raw: {
-        dockerfile: { type: Boolean, default: false },
-        ci: { type: Boolean, default: false },
-        readme: { type: Boolean, default: false },
-        tests: { type: Boolean, default: false },
-      },
-
-      maturity: {
-        totalScore: { type: Number, default: 0 },
-        maxScore: { type: Number, default: 100 },
-
-        // Flexible nested structure
-        categories: {
-          type: mongoose.Schema.Types.Mixed,
-          default: {},
-        },
-      },
-
-      scannedAt: {
-        type: Date,
-      },
+      type: ScanSchema,
+      default: null,
     },
   },
   { timestamps: true }

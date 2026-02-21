@@ -10,23 +10,23 @@ const router = Router();
  * POST /api/scan
  * Body:
  * {
- *   repoFullName: "owner/repo"
+ *   repoFullName: "owner/repo",
+ *   branch?: "main",
+ *   mode?: "production" | "demo"
  * }
  */
 router.post("/scan", async (req, res) => {
   try {
-    const { repoFullName } = req.body ?? {};
+    const {
+      repoFullName,
+      branch = "main",
+      mode = "production",
+    } = req.body ?? {};
 
-    // ===============================
-    // Validate input
-    // ===============================
     if (!repoFullName || typeof repoFullName !== "string") {
       return res.status(400).json({ error: "repoFullName is required" });
     }
 
-    // ===============================
-    // Must be authenticated
-    // ===============================
     if (!req.user) {
       return res.status(401).json({ error: "Not authenticated" });
     }
@@ -34,9 +34,6 @@ router.post("/scan", async (req, res) => {
     const username =
       req.user.profile?.username || req.user.profile?.login;
 
-    // ===============================
-    // Validate GitHub App installation
-    // ===============================
     const installation = await GitHubInstallation.findOne({
       accountLogin: username,
       suspended: false,
@@ -48,54 +45,49 @@ router.post("/scan", async (req, res) => {
       });
     }
 
-    // ===============================
-    // Convert repoFullName → repoUrl
-    // ===============================
     const repoUrl = `https://github.com/${repoFullName}.git`;
 
-    // ===============================
-    // Generate raw gap report
-    // ===============================
+    // 🔍 Run scan
     const rawReport = await generateGapReport({
       repoUrl,
       installationId: installation.installationId,
+      branch,
     });
 
-    // rawReport example:
-    // {
-    //   dockerfile: true,
-    //   ci: false,
-    //   readme: true,
-    //   tests: false
-    // }
-
-    // ===============================
-    // Calculate structured maturity
-    // ===============================
     const maturity = calculateMaturity(rawReport);
 
-    // ===============================
-    // Save scan result
-    // ===============================
+    const scanData = {
+      raw: rawReport,
+      maturity,
+      scannedAt: new Date(),
+      branch,
+    };
+
+    // 🔥 Maintain backward compatibility with lastScan
+    const updateFields =
+      mode === "demo"
+        ? {
+            lastScanDemo: scanData,
+            demoBranch: branch,
+            lastScan: scanData, // 🔥 compatibility layer
+          }
+        : {
+            lastScanProduction: scanData,
+            lastScan: scanData, // 🔥 compatibility layer
+          };
+
     await RepositoryConfig.findOneAndUpdate(
       { fullName: repoFullName },
       {
         $set: {
           fullName: repoFullName,
           installationId: installation.installationId,
-          lastScan: {
-            raw: rawReport,
-            maturity,
-            scannedAt: new Date(),
-          },
+          ...updateFields,
         },
       },
       { upsert: true, new: true }
     );
 
-    // ===============================
-    // Return structured maturity
-    // ===============================
     return res.json(maturity);
 
   } catch (error) {

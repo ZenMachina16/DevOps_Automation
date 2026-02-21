@@ -19,6 +19,8 @@ export default function RepositoryDetails() {
   const [generating, setGenerating] = useState(false);
   const [activeSession, setActiveSession] = useState(null);
 
+  const [mode, setMode] = useState("production"); // 🔥 NEW
+
   /* ===============================
      Load Repository Data
   =============================== */
@@ -73,14 +75,31 @@ export default function RepositoryDetails() {
   }, [activeSession]);
 
   /* ===============================
-     Manual Scan
+     Manual Scan (Mode Aware)
   =============================== */
   const handleScan = async () => {
     setScanning(true);
     try {
-      await api.post("/api/scan", { repoFullName });
+      let branch = "main";
+
+      if (mode === "demo") {
+        if (!repoData?.demoBranch) {
+          alert("No demo branch available yet.");
+          setScanning(false);
+          return;
+        }
+        branch = repoData.demoBranch;
+      }
+
+      await api.post("/api/scan", {
+        repoFullName,
+        branch,
+        mode,
+      });
+
       await loadRepo();
-    } catch {
+    } catch (err) {
+      console.error(err);
       alert("Scan failed");
     } finally {
       setScanning(false);
@@ -88,7 +107,7 @@ export default function RepositoryDetails() {
   };
 
   /* ===============================
-     Generate (WORKING ENDPOINT)
+     Generate Files
   =============================== */
   const handleGenerate = async () => {
     setGenerating(true);
@@ -125,14 +144,18 @@ export default function RepositoryDetails() {
   }
 
   if (error) {
-    return (
-      <div className="text-red-400">
-        {error}
-      </div>
-    );
+    return <div className="text-red-400">{error}</div>;
   }
 
-  const maturity = repoData?.lastScan?.maturity;
+  /* ===============================
+     Mode Based Scan Selection
+  =============================== */
+  const scanData =
+    mode === "production"
+      ? repoData?.lastScanProduction
+      : repoData?.lastScanDemo;
+
+  const maturity = scanData?.maturity;
   const totalScore = maturity?.totalScore || 0;
 
   const getLevelColor = () => {
@@ -154,9 +177,32 @@ export default function RepositoryDetails() {
         </p>
       </div>
 
-      {/* =========================================
-          🔥 AI DEVOPS AGENT (NOW AT TOP)
-      ========================================== */}
+      {/* ================= MODE TOGGLE ================= */}
+      <div className="flex gap-4">
+        <button
+          onClick={() => setMode("production")}
+          className={`px-4 py-2 rounded-lg text-sm ${
+            mode === "production"
+              ? "bg-blue-600 text-white"
+              : "bg-slate-800 text-slate-400"
+          }`}
+        >
+          Production Mode
+        </button>
+
+        <button
+          onClick={() => setMode("demo")}
+          className={`px-4 py-2 rounded-lg text-sm ${
+            mode === "demo"
+              ? "bg-purple-600 text-white"
+              : "bg-slate-800 text-slate-400"
+          }`}
+        >
+          Demo Mode
+        </button>
+      </div>
+
+      {/* ================= AI DEVOPS AGENT ================= */}
       <div className="bg-slate-900 border border-purple-700/40 rounded-xl p-6">
 
         <div className="flex justify-between items-center mb-4">
@@ -177,47 +223,15 @@ export default function RepositoryDetails() {
           )}
         </div>
 
-        {/* Active Session View */}
         {activeSession && (
-          <div className="space-y-3 text-sm">
-
-            <div className="flex justify-between text-slate-400">
-              <span>Session ID: {activeSession.sessionId}</span>
-              <span>Status: {activeSession.status}</span>
-            </div>
-
-            <ProgressStep
-              label="AI Generation"
-              current={activeSession.status}
-              step="GENERATING"
-            />
-            <ProgressStep
-              label="Code Created"
-              current={activeSession.status}
-              step="CODE_CREATED"
-            />
-            <ProgressStep
-              label="Pull Request Opened"
-              current={activeSession.status}
-              step="PR_OPEN"
-            />
-            <ProgressStep
-              label="CI/CD Running"
-              current={activeSession.status}
-              step="CI_RUNNING"
-            />
-            <ProgressStep
-              label="Completed"
-              current={activeSession.status}
-              step="COMPLETED"
-            />
-
+          <div className="text-sm text-slate-400">
+            Session ID: {activeSession.sessionId} <br />
+            Status: {activeSession.status}
           </div>
         )}
-
       </div>
 
-      {/* SUMMARY */}
+      {/* ================= SUMMARY ================= */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex justify-between items-center">
         <div>
           <div className="text-sm text-slate-400">
@@ -236,11 +250,13 @@ export default function RepositoryDetails() {
           {scanning && (
             <ArrowPathIcon className="h-4 w-4 animate-spin" />
           )}
-          {scanning ? "Scanning..." : "Run Scan"}
+          {scanning
+            ? "Scanning..."
+            : `Run ${mode === "production" ? "Production" : "Demo"} Scan`}
         </button>
       </div>
 
-      {/* MATURITY BREAKDOWN */}
+      {/* ================= MATURITY BREAKDOWN ================= */}
       {maturity && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-6">
@@ -287,50 +303,6 @@ export default function RepositoryDetails() {
           </div>
         </div>
       )}
-
-    </div>
-  );
-}
-
-/* ===============================
-   Progress Step Component
-=============================== */
-function ProgressStep({ label, current, step }) {
-  const steps = [
-    "GENERATING",
-    "CODE_CREATED",
-    "PR_OPEN",
-    "CI_RUNNING",
-    "COMPLETED",
-  ];
-
-  const currentIndex = steps.indexOf(current);
-  const stepIndex = steps.indexOf(step);
-
-  const isDone = stepIndex < currentIndex;
-  const isActive = stepIndex === currentIndex;
-
-  return (
-    <div className="flex items-center gap-3">
-      {isDone ? (
-        <CheckCircleIcon className="h-5 w-5 text-emerald-400" />
-      ) : isActive ? (
-        <ArrowPathIcon className="h-5 w-5 text-purple-400 animate-spin" />
-      ) : (
-        <div className="h-4 w-4 rounded-full bg-slate-700 border border-slate-600" />
-      )}
-
-      <span
-        className={
-          isDone
-            ? "text-emerald-400"
-            : isActive
-            ? "text-purple-400"
-            : "text-slate-500"
-        }
-      >
-        {label}
-      </span>
     </div>
   );
 }

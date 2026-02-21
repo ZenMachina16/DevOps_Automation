@@ -18,11 +18,9 @@ const checkRepoAccess = async (req, res, next) => {
       return res.status(401).json({ error: "Not authenticated" });
     }
 
-    // 🔥 Get GitHub username from auth session
     const username =
       req.user.profile?.username || req.user.profile?.login;
 
-    // 🔥 Find installation the same way dashboard does
     const installation = await GitHubInstallation.findOne({
       accountLogin: username,
       suspended: false,
@@ -45,7 +43,13 @@ const checkRepoAccess = async (req, res, next) => {
 };
 
 /* ========================================================
-   1. GET REPO DETAILS (Config + Last Scan + Active Session)
+   1️⃣ GET REPO DETAILS
+   Returns:
+   - production scan
+   - demo scan
+   - demo branch
+   - secrets
+   - active session
    ======================================================== */
 router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
   try {
@@ -53,7 +57,6 @@ router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
       fullName: req.repoFullName,
     });
 
-    // Check for active session (not completed/failed)
     const activeSession = await GenerationSession.findOne({
       repoFullName: req.repoFullName,
       status: { $nin: ["COMPLETED", "FAILED"] },
@@ -67,8 +70,24 @@ router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
 
     res.json({
       fullName: req.repoFullName,
+
+      // 🔥 NEW FIELDS
+      demoBranch: config?.demoBranch || null,
+
+      lastScanProduction:
+        config?.lastScanProduction || null,
+
+      lastScanDemo:
+        config?.lastScanDemo || null,
+
+      // 🔥 Backward compatibility (optional)
+      lastScan:
+        config?.lastScanProduction ||
+        config?.lastScan ||
+        null,
+
       secrets,
-      lastScan: config?.lastScan || null,
+
       activeSession: activeSession
         ? {
             sessionId: activeSession.sessionId,
@@ -87,7 +106,7 @@ router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
 });
 
 /* ========================================================
-   2. GET SECRETS (Names only)
+   2️⃣ GET SECRETS
    ======================================================== */
 router.get("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
   try {
@@ -112,7 +131,7 @@ router.get("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
 });
 
 /* ========================================================
-   3. ADD/UPDATE SECRET
+   3️⃣ ADD/UPDATE SECRET
    ======================================================== */
 router.post("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
   try {
@@ -126,7 +145,6 @@ router.post("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
 
     const { encrypted, iv } = encrypt(value);
 
-    // Remove existing key if present
     await RepositoryConfig.updateOne(
       { fullName: req.repoFullName },
       { $pull: { secrets: { key } } }
@@ -162,7 +180,7 @@ router.post("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
 });
 
 /* ========================================================
-   4. DELETE SECRET
+   4️⃣ DELETE SECRET
    ======================================================== */
 router.delete(
   "/:owner/:repo/secrets/:key",

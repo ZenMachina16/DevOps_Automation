@@ -10,6 +10,7 @@ dotenv.config();
 export class N8nClient {
   constructor() {
     this.webhookUrl = process.env.N8N_WEBHOOK_URL;
+
     if (!this.webhookUrl) {
       throw new Error('N8N_WEBHOOK_URL is not configured');
     }
@@ -18,19 +19,28 @@ export class N8nClient {
   /**
    * Send full repo context to n8n
    * @param {Object} context - Full repo context object
+   * @param {String} sessionId - Generation session ID (required)
    */
-  async generateFiles(context) {
+  async generateFiles(context, sessionId) {
+    if (!sessionId) {
+      throw new Error('generateFiles requires sessionId');
+    }
+
     if (!context?.repository?.url) {
       throw new Error('Invalid context: repository.url missing');
     }
 
     const payload = {
+      // 🔥 CRITICAL: Correlation ID
+      sessionId,
+
       repository: context.repository,
       project: context.project,
       scan: context.scan,
-      gap_report: context.scan.gapReport,
+      gap_report: context.scan?.gapReport || [],
       metadata: context.metadata || {},
       secrets: context.secrets || {},
+
       workflow: {
         source: 'devops-platform',
         version: '1.0.0',
@@ -49,7 +59,11 @@ export class N8nClient {
 
       return response.data;
     } catch (error) {
-      console.error('❌ n8n call failed:', error.response?.data || error.message);
+      console.error(
+        '❌ n8n call failed:',
+        error.response?.data || error.message
+      );
+
       throw new Error(
         error.response?.data?.error || 'n8n file generation failed'
       );

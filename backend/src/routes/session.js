@@ -1,68 +1,120 @@
 import { Router } from "express";
 import { GenerationSession } from "../models/GenerationSession.js";
+import { RepositoryConfig } from "../models/RepositoryConfig.js";
 
 const router = Router();
 
-// Mounted at /api
-
-/**
- * GET /api/session/:sessionId
- * Fetch session status and generated files
- */
+/* ============================================================
+   GET SESSION STATUS
+============================================================ */
 router.get("/session/:sessionId", async (req, res) => {
-    try {
-        const { sessionId } = req.params;
+  try {
+    const { sessionId } = req.params;
 
-        const session = await GenerationSession.findOne({ sessionId });
+    const session = await GenerationSession.findOne({ sessionId });
 
-        if (!session) {
-            return res.status(404).json({ error: "Session not found" });
-        }
-
-        return res.json(session);
-    } catch (error) {
-        console.error("Session fetch error:", error);
-        return res.status(500).json({ error: "Failed to fetch session" });
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
     }
+
+    return res.json(session);
+  } catch (error) {
+    console.error("❌ Session fetch error:", error);
+    return res.status(500).json({ error: "Failed to fetch session" });
+  }
 });
 
-/**
- * POST /api/webhooks/n8n/generation-complete
- * Webhook for n8n to report generated files
- */
+/* ============================================================
+   🔥 N8N GENERATION COMPLETE WEBHOOK
+============================================================ */
 router.post("/webhooks/n8n/generation-complete", async (req, res) => {
-    try {
-        const { sessionId, generatedFiles, branchName } = req.body;
+  try {
+    const {
+      sessionId,
+      generatedFiles,
+      branchName,
+      prUrl,
+      status,
+    } = req.body;
 
-        console.log(`📥 Received n8n completion for session ${sessionId}`);
+    console.log("📥 n8n webhook received");
+    console.log("Payload:", req.body);
 
-        if (!sessionId) {
-            return res.status(400).json({ error: "Missing sessionId" });
-        }
-
-        const session = await GenerationSession.findOne({ sessionId });
-        if (!session) {
-            return res.status(404).json({ error: "Session not found" });
-        }
-
-        // Update session
-        session.status = "CODE_CREATED";
-        session.generatedFiles = generatedFiles || {};
-        if (branchName) session.branchName = branchName;
-
-        // If n8n created the PR directly, we might get prUrl here too
-        if (req.body.prUrl) session.prUrl = req.body.prUrl;
-        if (req.body.status) session.status = req.body.status; // Allow override if n8n sends status like "PR_OPEN"
-
-        await session.save();
-
-        console.log(`✅ Session ${sessionId} updated with generated files`);
-
-        return res.json({ success: true });
-    } catch (error) {
-        console.error("n8n webhook error:", error);
-        return res.status(500).json({ error: "Webhook processing failed" });
+    /* ===============================
+       VALIDATION
+    =============================== */
+    if (!sessionId) {
+      return res.status(400).json({ error: "Missing sessionId" });
     }
+
+    const session = await GenerationSession.findOne({ sessionId });
+
+    if (!session) {
+      console.error("❌ Session not found:", sessionId);
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    if (!session.repoFullName) {
+      console.error("❌ Session missing repoFullName");
+      return res.status(400).json({
+        error: "Session missing repository reference",
+      });
+    }
+
+    console.log("📦 Repository:", session.repoFullName);
+
+    /* ===============================
+       UPDATE GENERATION SESSION
+    =============================== */
+
+    session.status = status || "CODE_CREATED";
+    session.generatedFiles = generatedFiles || session.generatedFiles;
+
+    if (branchName) {
+      session.branchName = branchName;
+    }
+
+    if (prUrl) {
+      session.prUrl = prUrl;
+    }
+
+    await session.save();
+
+    console.log(`✅ Session ${sessionId} updated`);
+
+    /* ===============================
+       🔥 SAVE DEMO BRANCH SAFELY
+    =============================== */
+
+    if (branchName) {
+      const repo = await RepositoryConfig.findOne({
+        fullName: session.repoFullName,
+      });
+
+      if (!repo) {
+        console.error(
+          "❌ RepositoryConfig not found for:",
+          session.repoFullName
+        );
+        return res.status(404).json({
+          error: "Repository configuration not found",
+        });
+      }
+
+      repo.demoBranch = branchName;
+      await repo.save();
+
+      console.log(
+        `📌 Demo branch "${branchName}" saved for ${session.repoFullName}`
+      );
+    }
+
+    return res.json({ success: true });
+
+  } catch (error) {
+    console.error("❌ n8n webhook error:", error);
+    return res.status(500).json({ error: "Webhook processing failed" });
+  }
 });
 
 export default router;

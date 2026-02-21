@@ -280,25 +280,28 @@ export async function gapDetector({
 
 
   return {
-    hasBackend,
-    hasFrontend,
+  // Core detection (for maturity engine)
+  dockerfile: hasAnyDockerfile,
+  ci: usesGithubActions,
+  readme: hasReadme,
+  tests: hasTests,
 
-    hasBackendFolder,
-    hasFrontendFolder,
-
-    backendPath,
-    frontendPath,
-
-    backendType: hasBackend ? "node" : null,
-    frontendType: hasFrontend ? "react" : null,
-
-    usesDocker: hasAnyDockerfile,
-    usesGithubActions,
-    hasReadme,
-    hasTests,
-    gapReport,
-    envVars: Array.from(envVars),
-  };
+  // Extended intelligence (keep your advanced data)
+  hasBackend,
+  hasFrontend,
+  hasBackendFolder,
+  hasFrontendFolder,
+  backendPath,
+  frontendPath,
+  backendType: hasBackend ? "node" : null,
+  frontendType: hasFrontend ? "react" : null,
+  usesDocker: hasAnyDockerfile,
+  usesGithubActions,
+  hasReadme,
+  hasTests,
+  gapReport,
+  envVars: Array.from(envVars),
+};
 
 
 }
@@ -308,7 +311,11 @@ export async function gapDetector({
  * Public API
  * -------------------------------
  */
-export async function generateGapReport({ repoUrl, installationId }) {
+export async function generateGapReport({
+  repoUrl,
+  installationId,
+  branch = "main", // allow custom branch
+}) {
   const parsed = parseGitHubUrl(repoUrl);
   if (!parsed) {
     throw new Error("Invalid GitHub repository URL");
@@ -317,7 +324,7 @@ export async function generateGapReport({ repoUrl, installationId }) {
   return gapDetector({
     owner: parsed.owner,
     repo: parsed.repo,
-    branch: "main",
+    branch, // use provided branch instead of hardcoded main
     installationId,
   });
 }
