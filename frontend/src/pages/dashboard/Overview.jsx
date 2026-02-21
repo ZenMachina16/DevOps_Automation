@@ -5,11 +5,16 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState("production"); // 🔥 NEW
 
+  /* ===============================
+     Load Dashboard (Mode Aware)
+  =============================== */
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const res = await api.get("/api/dashboard");
+        setLoading(true);
+        const res = await api.get(`/api/dashboard?mode=${mode}`);
         setData(res.data);
       } catch (err) {
         console.error("Dashboard load failed", err);
@@ -20,7 +25,7 @@ export default function Overview() {
     };
 
     loadDashboard();
-  }, []);
+  }, [mode]); // 🔥 reload when mode changes
 
   if (loading) {
     return (
@@ -44,7 +49,6 @@ export default function Overview() {
     repositories = [],
   } = data || {};
 
-  // ✅ Use maturityScore (NOT maturity.totalScore)
   const analyzedRepos = repositories.filter(
     (r) => r.maturityScore !== null
   );
@@ -66,17 +70,44 @@ export default function Overview() {
   return (
     <div className="space-y-8">
 
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white">
-          Organization Overview
-        </h1>
-        <p className="text-slate-400 mt-1">
-          DevOps maturity and CI health across all repositories.
-        </p>
+      {/* ================= HEADER ================= */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-white">
+            Organization Overview
+          </h1>
+          <p className="text-slate-400 mt-1">
+            DevOps maturity and CI health across all repositories.
+          </p>
+        </div>
+
+        {/* 🔥 MODE TOGGLE */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => setMode("production")}
+            className={`px-4 py-2 rounded-lg text-sm ${
+              mode === "production"
+                ? "bg-blue-600 text-white"
+                : "bg-slate-800 text-slate-400"
+            }`}
+          >
+            Production Mode
+          </button>
+
+          <button
+            onClick={() => setMode("demo")}
+            className={`px-4 py-2 rounded-lg text-sm ${
+              mode === "demo"
+                ? "bg-purple-600 text-white"
+                : "bg-slate-800 text-slate-400"
+            }`}
+          >
+            Demo Mode
+          </button>
+        </div>
       </div>
 
-      {/* 🔥 Metrics Row */}
+      {/* ================= METRICS ================= */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
 
         <MetricCard
@@ -85,7 +116,7 @@ export default function Overview() {
         />
 
         <MetricCard
-          title="Average Maturity"
+          title={`Average Maturity (${mode})`}
           value={`${averageMaturity || 0}%`}
         />
 
@@ -102,7 +133,7 @@ export default function Overview() {
 
       </div>
 
-      {/* ⚠ Attention Required */}
+      {/* ================= ATTENTION ================= */}
       {belowStandard.length > 0 && (
         <div className="bg-slate-900 border border-red-900/40 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-red-400 mb-4">
@@ -133,7 +164,7 @@ export default function Overview() {
         </div>
       )}
 
-      {/* 📊 Maturity Distribution */}
+      {/* ================= DISTRIBUTION ================= */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
         <h2 className="text-lg font-semibold text-white mb-4">
           Maturity Distribution

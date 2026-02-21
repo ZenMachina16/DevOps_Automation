@@ -8,12 +8,16 @@ const router = Router();
 /**
  * GET /api/dashboard
  * Organization-level overview
+ * Query:
+ *   ?mode=production | demo
  */
 router.get("/", async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Not authenticated" });
     }
+
+    const mode = req.query.mode === "demo" ? "demo" : "production";
 
     const username =
       req.user.profile?.username || req.user.profile?.login;
@@ -30,12 +34,12 @@ router.get("/", async (req, res) => {
       });
     }
 
-    // 2️⃣ Fetch repos from GitHub using YOUR existing service
+    // 2️⃣ Fetch repos from GitHub
     const githubRepos = await fetchInstallationRepos(
       installation.installationId
     );
 
-    // 3️⃣ Fetch saved scan configs
+    // 3️⃣ Fetch saved configs
     const savedConfigs = await RepositoryConfig.find({
       installationId: installation.installationId,
     });
@@ -45,11 +49,11 @@ router.get("/", async (req, res) => {
       configMap[config.fullName] = config;
     });
 
-    // 4️⃣ Enrich repos with maturity
+    // 4️⃣ Enrich repos with selected mode scan
     const enrichedRepos = githubRepos.map((repo) => {
       const saved = configMap[repo.fullName];
 
-      if (!saved || !saved.lastScan?.maturity) {
+      if (!saved) {
         return {
           fullName: repo.fullName,
           private: repo.private,
@@ -60,7 +64,23 @@ router.get("/", async (req, res) => {
         };
       }
 
-      const score = saved.lastScan.maturity.totalScore;
+      const scan =
+        mode === "demo"
+          ? saved.lastScanDemo
+          : saved.lastScanProduction;
+
+      if (!scan?.maturity) {
+        return {
+          fullName: repo.fullName,
+          private: repo.private,
+          defaultBranch: repo.defaultBranch,
+          maturityScore: null,
+          maturityLevel: "NOT_ANALYZED",
+          lastScannedAt: null,
+        };
+      }
+
+      const score = scan.maturity.totalScore;
 
       let maturityLevel = "CRITICAL";
       if (score >= 80) maturityLevel = "HEALTHY";
@@ -72,13 +92,30 @@ router.get("/", async (req, res) => {
         defaultBranch: repo.defaultBranch,
         maturityScore: score,
         maturityLevel,
-        lastScannedAt: saved.lastScan.scannedAt,
+        lastScannedAt: scan.scannedAt,
       };
     });
 
+    // 5️⃣ Calculate organization average
+    const analyzedRepos = enrichedRepos.filter(
+      (r) => r.maturityScore !== null
+    );
+
+    const averageMaturity =
+      analyzedRepos.length === 0
+        ? 0
+        : Math.round(
+            analyzedRepos.reduce(
+              (sum, r) => sum + r.maturityScore,
+              0
+            ) / analyzedRepos.length
+          );
+
     return res.json({
       totalRepositories: enrichedRepos.length,
+      averageMaturity,
       repositories: enrichedRepos,
+      mode,
     });
 
   } catch (err) {
