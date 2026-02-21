@@ -6,18 +6,7 @@ import passport from "passport";
 import { Strategy as GitHubStrategy } from "passport-github2";
 import http from "http";
 import { Server } from "socket.io";
-
-import scanRouter from "./src/routes/scan.js";
-import authRouter from "./src/routes/auth.js";
-import generateRouter from "./src/routes/generate.js";
-import githubWebhookRouter from "./src/routes/githubWebhook.js";
-import githubAppRoutes from "./src/routes/githubApp.js";
-import installationRoutes from "./src/routes/installation.js";
-import settingsRouter from "./src/routes/settings.js";
-import sessionRouter from "./src/routes/session.js";
-import repoRouter from "./src/routes/repository.js";
-
-import { connectMongo } from "./src/db/mongo.js";
+import mongoose from "mongoose";
 
 // ===============================
 // 🔴 ENV FIRST
@@ -40,12 +29,11 @@ const server = http.createServer(app);
 // ===============================
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:2000", // your frontend
+    origin: "http://localhost:2000",
     credentials: true,
   },
 });
 
-// Make io accessible inside routes
 app.set("io", io);
 
 io.on("connection", (socket) => {
@@ -64,10 +52,11 @@ io.on("connection", (socket) => {
 // ===============================
 // 🔌 Mongo
 // ===============================
+import { connectMongo } from "./src/db/mongo.js";
 await connectMongo();
 
 // ===============================
-// 🌍 Middleware (ORDER MATTERS)
+// 🌍 Middleware
 // ===============================
 app.use(
   cors({
@@ -94,7 +83,7 @@ app.use(
 );
 
 // ===============================
-// 🔐 PASSPORT (AFTER SESSION)
+// 🔐 Passport
 // ===============================
 passport.use(
   new GitHubStrategy(
@@ -116,10 +105,8 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ===============================
-// ❤️ Health
+// ❤️ Health Check
 // ===============================
-import mongoose from "mongoose";
-
 app.get("/health", async (req, res) => {
   const n8nUrl = process.env.N8N_WEBHOOK_URL;
   const mongoStatus = mongoose.connection.readyState === 1 ? "ok" : "down";
@@ -129,14 +116,25 @@ app.get("/health", async (req, res) => {
     services: {
       database: mongoStatus,
       n8n: n8nUrl ? "configured" : "missing_url",
-      github: process.env.GITHUB_CLIENT_ID ? "configured" : "missing_creds"
-    }
+      github: process.env.GITHUB_CLIENT_ID ? "configured" : "missing_creds",
+    },
   });
 });
 
 // ===============================
 // 🔐 Routes
 // ===============================
+import scanRouter from "./src/routes/scan.js";
+import authRouter from "./src/routes/auth.js";
+import generateRouter from "./src/routes/generate.js";
+import githubWebhookRouter from "./src/routes/githubWebhook.js";
+import githubAppRoutes from "./src/routes/githubApp.js";
+import installationRoutes from "./src/routes/installation.js";
+import settingsRouter from "./src/routes/settings.js";
+import sessionRouter from "./src/routes/session.js";
+import repoRouter from "./src/routes/repository.js";
+import dashboardRouter from "./src/routes/dashboard.js"; // ✅ IMPORTANT
+
 app.use("/auth", authRouter);
 app.use("/auth/github-app", githubAppRoutes);
 app.use("/api/installation", installationRoutes);
@@ -146,9 +144,10 @@ app.use("/api/github", githubWebhookRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api", sessionRouter);
 app.use("/api/repo", repoRouter);
+app.use("/api/dashboard", dashboardRouter); // ✅ MOUNTED
 
 // ===============================
-// 🚀 Start server (IMPORTANT)
+// 🚀 Start Server
 // ===============================
 const PORT = process.env.PORT ?? 7000;
 

@@ -7,113 +7,128 @@ import {
 import { n8nClient } from "../services/langflowClient.js";
 import { GitHubInstallation } from "../models/GitHubInstallation.js";
 import { decrypt } from "../services/secretsService.js";
+import { v4 as uuidv4 } from "uuid";
+import { GenerationSession } from "../models/GenerationSession.js";
+import { RepositoryConfig } from "../models/RepositoryConfig.js";
 
 const router = Router();
 
 /**
  * POST /api/generate-files
- * Triggers DevOps automation via n8n
- *
- * Expects:
+ * Body:
  * {
  *   repoFullName: "owner/repo"
  * }
  */
-import { v4 as uuidv4 } from 'uuid';
-import { GenerationSession } from "../models/GenerationSession.js";
-import { RepositoryConfig } from "../models/RepositoryConfig.js";
-
 router.post("/generate-files", async (req, res) => {
   try {
     const { repoFullName } = req.body ?? {};
 
     if (!repoFullName || typeof repoFullName !== "string") {
       return res.status(400).json({
+        success: false,
         error: "repoFullName is required",
       });
     }
 
-    // 🔐 GitHub App installation REQUIRED
-    const installationId = req.user?.installationId;
-    if (!installationId) {
-      return res.status(400).json({
+    /* ======================================================
+       🔐 Resolve GitHub Installation (FIXED VERSION)
+       ====================================================== */
+
+    const username =
+      req.user?.profile?.username ||
+      req.user?.profile?.login;
+
+    if (!username) {
+      return res.status(401).json({
+        success: false,
+        error: "User authentication missing profile",
+      });
+    }
+
+    const installation = await GitHubInstallation.findOne({
+      accountLogin: username,
+      suspended: false,
+    });
+
+    if (!installation) {
+      return res.status(403).json({
+        success: false,
         error: "GitHub App not installed for this user",
       });
     }
 
-    // 🔁 Canonical conversion
+    const installationId = installation.installationId;
+
+    /* ======================================================
+       📦 Prepare Repo
+       ====================================================== */
+
     const repoUrl = `https://github.com/${repoFullName}.git`;
     console.log(`🚀 DevOps generation started for: ${repoUrl}`);
 
-    /* -------------------------------------------------
-       1️⃣ Parse repository URL
-    -------------------------------------------------- */
     const parsed = parseGitHubUrl(repoUrl);
     if (!parsed) {
       return res.status(400).json({
+        success: false,
         error: "Invalid GitHub repository",
       });
     }
 
-    /* -------------------------------------------------
+    /* ======================================================
        🆕 Create Session
-    -------------------------------------------------- */
+       ====================================================== */
+
     const sessionId = uuidv4();
-    const newSession = await GenerationSession.create({
+
+    await GenerationSession.create({
       sessionId,
       repoFullName,
-      status: 'GENERATING'
+      status: "GENERATING",
     });
 
-    console.log(`✅ Created session ${sessionId} for ${repoFullName}`);
+    console.log(`✅ Created session ${sessionId}`);
 
-    // --- Perform heavy lifting asynchronously ---
+    /* ======================================================
+       🔁 Background Processing
+       ====================================================== */
+
     (async () => {
       try {
-        /* -------------------------------------------------
-        2️⃣ Scan repository (GitHub App aware)
-        -------------------------------------------------- */
+        /* 1️⃣ Scan Repository */
         const scanResult = await generateGapReport({
           repoUrl,
           installationId,
         });
 
-        /* -------------------------------------------------
-        3️⃣ Fetch metadata (package.json if exists)
-        -------------------------------------------------- */
+        /* 2️⃣ Fetch Metadata */
         const metadata = await fetchPackageJson({
           owner: parsed.owner,
           repo: parsed.repo,
           installationId,
         });
 
-        /* -------------------------------------------------
-        3.5️⃣ Fetch User Secrets (Decrypted)
-        -------------------------------------------------- */
+        /* 3️⃣ Load & Decrypt Repo Secrets */
         let decryptedSecrets = {};
 
-        // 1. Fetch Global/Installation Secrets (Optional, if you still want them as fallback)
-        // ... (Skipping for now to enforce Repo-Only isolation as requested)
+        const repoConfig = await RepositoryConfig.findOne({
+          fullName: repoFullName,
+        });
 
-        // 2. Fetch Repo-Specific Secrets
-        const repoConfig = await RepositoryConfig.findOne({ fullName: repoFullName });
-        if (repoConfig && repoConfig.secrets) {
+        if (repoConfig?.secrets) {
           repoConfig.secrets.forEach((s) => {
             try {
               const val = decrypt(s.encryptedValue, s.iv);
               if (val) decryptedSecrets[s.key] = val;
             } catch (e) {
-              console.error(`Failed to decrypt repo secret ${s.key}`, e);
+              console.error(`Secret decrypt failed: ${s.key}`);
             }
           });
-          console.log(`🔐 Injected ${Object.keys(decryptedSecrets).length} REPO-SCOPED secrets into context`);
         }
 
-        /* -------------------------------------------------
-        4️⃣ Build canonical payload for n8n
-        -------------------------------------------------- */
+        /* 4️⃣ Build Payload */
         const payloadForN8n = {
-          sessionId, // 🔑 IMPORTANT: Pass session ID to n8n
+          sessionId,
           repository: {
             owner: parsed.owner,
             name: parsed.repo,
@@ -121,7 +136,6 @@ router.post("/generate-files", async (req, res) => {
             url: repoUrl,
             defaultBranch: "main",
           },
-
           project: {
             language: "JavaScript",
             manifestFilename: "package.json",
@@ -131,30 +145,29 @@ router.post("/generate-files", async (req, res) => {
             dependencies: metadata?.dependencies || {},
             scripts: metadata?.scripts || {},
           },
-
           scan: scanResult,
-          gap_report: scanResult.gapReport,
+          gap_report: scanResult?.gapReport,
           metadata,
-          secrets: decryptedSecrets
+          secrets: decryptedSecrets,
         };
 
-        /* -------------------------------------------------
-        5️⃣ Send payload to n8n DevOps workflow
-        -------------------------------------------------- */
-        // We do NOT await the result here because n8n will webhook back to us
-        // But we DO await the initial *submission* to make sure n8n got it
+        /* 5️⃣ Send to n8n */
         await n8nClient.generateFiles(payloadForN8n);
 
       } catch (bgError) {
-        console.error(`❌ Background generation failed for session ${sessionId}:`, bgError);
-        // Update session to failed
-        await GenerationSession.updateOne({ sessionId }, { status: 'FAILED' });
+        console.error("❌ Background generation failed:", bgError);
+
+        await GenerationSession.updateOne(
+          { sessionId },
+          { status: "FAILED" }
+        );
       }
     })();
 
-    /* -------------------------------------------------
-       6️⃣ Return Session ID immediately
-    -------------------------------------------------- */
+    /* ======================================================
+       🚀 Immediate Response
+       ====================================================== */
+
     return res.json({
       success: true,
       sessionId,
@@ -176,7 +189,6 @@ router.post("/generate-files", async (req, res) => {
 
 /**
  * GET /api/generate-status
- * Checks n8n connectivity
  */
 router.get("/generate-status", async (_req, res) => {
   try {

@@ -1,27 +1,57 @@
 import mongoose from "mongoose";
 
-const RepositorySchema = new mongoose.Schema({
-    fullName: { type: String, required: true, unique: true }, // "owner/repo"
-    installationId: { type: Number, required: true },
+const RepositorySchema = new mongoose.Schema(
+  {
+    fullName: {
+      type: String,
+      required: true,
+      unique: true, // "owner/repo"
+    },
 
-    // Encrypted secrets specific to this repo
+    installationId: {
+      type: Number,
+      required: true,
+    },
+
+    // 🔐 Encrypted secrets specific to this repo
     secrets: [
-        {
-            key: { type: String, required: true },
-            encryptedValue: { type: String, required: true },
-            iv: { type: String, required: true },
-            updatedAt: { type: Date, default: Date.now }
-        }
+      {
+        key: { type: String, required: true },
+        encryptedValue: { type: String, required: true },
+        iv: { type: String, required: true },
+        updatedAt: { type: Date, default: Date.now },
+      },
     ],
 
-    // Store last scan results here for quick access
+    // 📊 Structured scan result
     lastScan: {
-        dockerfile: Boolean,
-        ci: Boolean,
-        readme: Boolean,
-        tests: Boolean,
-        scannedAt: Date
-    }
-}, { timestamps: true });
+      raw: {
+        dockerfile: { type: Boolean, default: false },
+        ci: { type: Boolean, default: false },
+        readme: { type: Boolean, default: false },
+        tests: { type: Boolean, default: false },
+      },
 
-export const RepositoryConfig = mongoose.model("RepositoryConfig", RepositorySchema);
+      maturity: {
+        totalScore: { type: Number, default: 0 },
+        maxScore: { type: Number, default: 100 },
+
+        // Flexible nested structure
+        categories: {
+          type: mongoose.Schema.Types.Mixed,
+          default: {},
+        },
+      },
+
+      scannedAt: {
+        type: Date,
+      },
+    },
+  },
+  { timestamps: true }
+);
+
+export const RepositoryConfig = mongoose.model(
+  "RepositoryConfig",
+  RepositorySchema
+);

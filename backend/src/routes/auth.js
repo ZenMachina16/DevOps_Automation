@@ -24,7 +24,7 @@ router.get(
     failureRedirect: "http://localhost:2000?error=auth_failed",
   }),
   (req, res) => {
-    res.redirect("http://localhost:2000/scan");
+    res.redirect("http://localhost:2000/dashboard");
   }
 );
 

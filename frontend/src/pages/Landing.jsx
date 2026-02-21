@@ -25,7 +25,7 @@ export default function Landing() {
         </motion.p>
         <div className="mt-8 flex gap-3 justify-center">
           <Link to="/signup"><Button size="lg">Get Started</Button></Link>
-          <Link to="/scan"><Button size="lg" variant="outline">Scan a repo</Button></Link>
+          <Link to="/dashboard"><Button size="lg" variant="outline">Scan a repo</Button></Link>
         </div>
       </section>
 

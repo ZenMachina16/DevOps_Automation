@@ -4,12 +4,17 @@ import { motion } from "framer-motion";
 
 import BaseLayout from "./components/layout/BaseLayout";
 import LandingPage from "./pages/Landing/LandingPage.jsx";
-import Scan from "./pages/Scan.jsx";
 import api from "./api/axios.js";
 import Setup from "./pages/Setup.jsx";
 import Config from "./pages/Config.jsx";
-import RepoDetails from "./pages/RepoDetails.jsx";
 
+// 🆕 Dashboard Architecture
+import DashboardLayout from "./layouts/DashboardLayout";
+import Overview from "./pages/dashboard/Overview";
+import Repositories from "./pages/dashboard/Repositories";
+import RepositoryDetails from "./pages/dashboard/RepositoryDetails";
+import Insights from "./pages/dashboard/Insights";
+import Settings from "./pages/dashboard/Settings";
 
 // ===============================
 // 🔒 Protected Route Wrapper
@@ -23,7 +28,7 @@ function ProtectedRoute({ children }) {
       try {
         await api.get("/auth/user");
         setIsAuthenticated(true);
-      } catch (err) {
+      } catch {
         setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
@@ -34,7 +39,7 @@ function ProtectedRoute({ children }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400">
         Checking authentication...
       </div>
     );
@@ -48,7 +53,7 @@ function ProtectedRoute({ children }) {
 }
 
 // ===============================
-// 🔁 GitHub App Setup Route
+// 🔁 GitHub App Setup Redirect
 // ===============================
 function GitHubSetupRedirect() {
   const navigate = useNavigate();
@@ -59,13 +64,12 @@ function GitHubSetupRedirect() {
 
     console.log("GitHub installation_id:", installationId);
 
-    // Later you will send this to backend
-    // For now just continue to scan
-    navigate("/scan", { replace: true });
+    // After installation → go to dashboard
+    navigate("/dashboard", { replace: true });
   }, [navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400">
       Setting up GitHub integration...
     </div>
   );
@@ -76,11 +80,12 @@ function GitHubSetupRedirect() {
 // ===============================
 export default function App() {
   useEffect(() => {
-    document.title = "DevOps Automation Dashboard";
+    document.title = "ShipIQ – DevOps Control Platform";
   }, []);
 
   return (
     <Routes>
+
       {/* 🏠 Landing Page */}
       <Route
         path="/"
@@ -102,35 +107,40 @@ export default function App() {
         path="/setup"
         element={
           <ProtectedRoute>
-            <Setup />
+            <GitHubSetupRedirect />
           </ProtectedRoute>
         }
       />
 
-
-      {/* 🔐 Protected Scan Page */}
+      {/* 🆕 DASHBOARD (Protected Nested Layout) */}
       <Route
-        path="/scan"
+        path="/dashboard"
         element={
           <ProtectedRoute>
-            <Scan />
+            <DashboardLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        {/* Overview */}
+        <Route index element={<Overview />} />
 
-      {/* 🔐 Protected Repo Details Page */}
-      <Route
-        path="/repo/:owner/:repoName"
-        element={
-          <ProtectedRoute>
-            <RepoDetails />
-          </ProtectedRoute>
-        }
-      />
+        {/* Repositories List */}
+        <Route path="repositories" element={<Repositories />} />
 
+        {/* Repository Detail (Nested under dashboard) */}
+        <Route
+          path="repositories/:owner/:repoName"
+          element={<RepositoryDetails />}
+        />
 
+        {/* Insights */}
+        <Route path="insights" element={<Insights />} />
 
-      {/* 🔐 Protected Config Page */}
+        {/* Settings */}
+        <Route path="settings" element={<Settings />} />
+      </Route>
+
+      {/* 🔐 Protected Config */}
       <Route
         path="/config"
         element={
@@ -142,6 +152,7 @@ export default function App() {
 
       {/* 🚫 Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
+
     </Routes>
   );
 }
