@@ -6,7 +6,7 @@ import {
 } from "../services/repoScanner.js";
 import { n8nClient } from "../services/langflowClient.js";
 import { GitHubInstallation } from "../models/GitHubInstallation.js";
-import { decrypt } from "../services/secretsService.js";
+import { decrypt } from "../utils/encryption.js"; // ✅ UPDATED
 import { v4 as uuidv4 } from "uuid";
 import { GenerationSession } from "../models/GenerationSession.js";
 import { RepositoryConfig } from "../models/RepositoryConfig.js";
@@ -45,7 +45,6 @@ router.post("/generate-files", async (req, res) => {
     const repoUrl = `https://github.com/${repoFullName}.git`;
     const parsed = parseGitHubUrl(repoUrl);
 
-    // 🔥 Create correlation ID
     const sessionId = uuidv4();
 
     await GenerationSession.create({
@@ -54,7 +53,6 @@ router.post("/generate-files", async (req, res) => {
       status: "GENERATING",
     });
 
-    // Run generation in background
     (async () => {
       try {
         const scanResult = await generateGapReport({
@@ -84,7 +82,6 @@ router.post("/generate-files", async (req, res) => {
           });
         }
 
-        // 🔥 Context object WITHOUT sessionId
         const contextForN8n = {
           repository: {
             owner: parsed.owner,
@@ -98,13 +95,11 @@ router.post("/generate-files", async (req, res) => {
           secrets: decryptedSecrets,
         };
 
-        // 🔥 Pass sessionId separately (CRITICAL FIX)
         const result = await n8nClient.generateFiles(
           contextForN8n,
           sessionId
         );
 
-        // Optional immediate branch handling if n8n returns it
         const generatedBranch = result?.branchName;
 
         if (generatedBranch) {

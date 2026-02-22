@@ -109,14 +109,17 @@ app.use(passport.session());
 // ===============================
 app.get("/health", async (req, res) => {
   const n8nUrl = process.env.N8N_WEBHOOK_URL;
-  const mongoStatus = mongoose.connection.readyState === 1 ? "ok" : "down";
+  const mongoStatus =
+    mongoose.connection.readyState === 1 ? "ok" : "down";
 
   res.json({
     status: mongoStatus === "ok" ? "ok" : "critical",
     services: {
       database: mongoStatus,
       n8n: n8nUrl ? "configured" : "missing_url",
-      github: process.env.GITHUB_CLIENT_ID ? "configured" : "missing_creds",
+      github: process.env.GITHUB_CLIENT_ID
+        ? "configured"
+        : "missing_creds",
     },
   });
 });
@@ -133,7 +136,8 @@ import installationRoutes from "./src/routes/installation.js";
 import settingsRouter from "./src/routes/settings.js";
 import sessionRouter from "./src/routes/session.js";
 import repoRouter from "./src/routes/repository.js";
-import dashboardRouter from "./src/routes/dashboard.js"; // ✅ IMPORTANT
+import dashboardRouter from "./src/routes/dashboard.js";
+import repositorySecretsRouter from "./src/routes/repositorySecrets.js"; // ✅ NEW
 
 app.use("/auth", authRouter);
 app.use("/auth/github-app", githubAppRoutes);
@@ -144,7 +148,10 @@ app.use("/api/github", githubWebhookRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api", sessionRouter);
 app.use("/api/repo", repoRouter);
-app.use("/api/dashboard", dashboardRouter); // ✅ MOUNTED
+app.use("/api/dashboard", dashboardRouter);
+
+// 🔐 Secret Management Routes
+app.use("/api/secrets", repositorySecretsRouter); // ✅ CLEAN MOUNT
 
 // ===============================
 // 🚀 Start Server

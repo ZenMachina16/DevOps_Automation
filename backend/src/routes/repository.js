@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { RepositoryConfig } from "../models/RepositoryConfig.js";
-import { encrypt } from "../services/secretsService.js";
+import { encrypt } from "../utils/encryption.js"; // ✅ UPDATED
 import { GitHubInstallation } from "../models/GitHubInstallation.js";
 import { GenerationSession } from "../models/GenerationSession.js";
 
@@ -8,7 +8,7 @@ const router = Router();
 
 /* ========================================================
    MIDDLEWARE: Ensure user has access through installation
-   ======================================================== */
+======================================================== */
 const checkRepoAccess = async (req, res, next) => {
   try {
     const { owner, repo } = req.params;
@@ -44,13 +44,7 @@ const checkRepoAccess = async (req, res, next) => {
 
 /* ========================================================
    1️⃣ GET REPO DETAILS
-   Returns:
-   - production scan
-   - demo scan
-   - demo branch
-   - secrets
-   - active session
-   ======================================================== */
+======================================================== */
 router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
   try {
     const config = await RepositoryConfig.findOne({
@@ -70,24 +64,14 @@ router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
 
     res.json({
       fullName: req.repoFullName,
-
-      // 🔥 NEW FIELDS
       demoBranch: config?.demoBranch || null,
-
-      lastScanProduction:
-        config?.lastScanProduction || null,
-
-      lastScanDemo:
-        config?.lastScanDemo || null,
-
-      // 🔥 Backward compatibility (optional)
+      lastScanProduction: config?.lastScanProduction || null,
+      lastScanDemo: config?.lastScanDemo || null,
       lastScan:
         config?.lastScanProduction ||
         config?.lastScan ||
         null,
-
       secrets,
-
       activeSession: activeSession
         ? {
             sessionId: activeSession.sessionId,
@@ -107,7 +91,7 @@ router.get("/:owner/:repo", checkRepoAccess, async (req, res) => {
 
 /* ========================================================
    2️⃣ GET SECRETS
-   ======================================================== */
+======================================================== */
 router.get("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
   try {
     const config = await RepositoryConfig.findOne({
@@ -132,7 +116,7 @@ router.get("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
 
 /* ========================================================
    3️⃣ ADD/UPDATE SECRET
-   ======================================================== */
+======================================================== */
 router.post("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
   try {
     const { key, value } = req.body;
@@ -143,7 +127,7 @@ router.post("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
         .json({ error: "Key and value are required" });
     }
 
-    const { encrypted, iv } = encrypt(value);
+    const { encryptedValue, iv } = encrypt(value); // ✅ FIXED
 
     await RepositoryConfig.updateOne(
       { fullName: req.repoFullName },
@@ -160,7 +144,7 @@ router.post("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
         $push: {
           secrets: {
             key,
-            encryptedValue: encrypted,
+            encryptedValue,
             iv,
             updatedAt: new Date(),
           },
@@ -181,7 +165,7 @@ router.post("/:owner/:repo/secrets", checkRepoAccess, async (req, res) => {
 
 /* ========================================================
    4️⃣ DELETE SECRET
-   ======================================================== */
+======================================================== */
 router.delete(
   "/:owner/:repo/secrets/:key",
   checkRepoAccess,
