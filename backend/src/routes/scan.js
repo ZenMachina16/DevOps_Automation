@@ -8,12 +8,6 @@ const router = Router();
 
 /**
  * POST /api/scan
- * Body:
- * {
- *   repoFullName: "owner/repo",
- *   branch?: "main",
- *   mode?: "production" | "demo"
- * }
  */
 router.post("/scan", async (req, res) => {
   try {
@@ -54,26 +48,30 @@ router.post("/scan", async (req, res) => {
       branch,
     });
 
+    // 🔥 GUARANTEE envVars always exists
+    if (!rawReport.envVars) {
+      rawReport.envVars = [];
+    }
+
     const maturity = calculateMaturity(rawReport);
 
     const scanData = {
-      raw: rawReport,
+      raw: rawReport, // STORE FULL OBJECT
       maturity,
       scannedAt: new Date(),
       branch,
     };
 
-    // 🔥 Maintain backward compatibility with lastScan
     const updateFields =
       mode === "demo"
         ? {
             lastScanDemo: scanData,
             demoBranch: branch,
-            lastScan: scanData, // 🔥 compatibility layer
+            lastScan: scanData,
           }
         : {
             lastScanProduction: scanData,
-            lastScan: scanData, // 🔥 compatibility layer
+            lastScan: scanData,
           };
 
     await RepositoryConfig.findOneAndUpdate(
@@ -88,7 +86,11 @@ router.post("/scan", async (req, res) => {
       { upsert: true, new: true }
     );
 
-    return res.json(maturity);
+    return res.json({
+      success: true,
+      maturity,
+      envVars: rawReport.envVars, // helpful debug
+    });
 
   } catch (error) {
     console.error("Scan error:", error);

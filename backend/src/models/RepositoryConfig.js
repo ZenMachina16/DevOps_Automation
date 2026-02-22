@@ -5,11 +5,10 @@ import mongoose from "mongoose";
 ====================================================== */
 const ScanSchema = new mongoose.Schema(
   {
+    // 🔥 Allow full intelligent scan snapshot
     raw: {
-      dockerfile: { type: Boolean, default: false },
-      ci: { type: Boolean, default: false },
-      readme: { type: Boolean, default: false },
-      tests: { type: Boolean, default: false },
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
 
     maturity: {
@@ -42,7 +41,7 @@ const RepositorySchema = new mongoose.Schema(
     fullName: {
       type: String,
       required: true,
-      unique: true, // "owner/repo"
+      unique: true,
     },
 
     installationId: {
@@ -63,7 +62,7 @@ const RepositorySchema = new mongoose.Schema(
     ],
 
     /* ==================================================
-       📊 Production Scan (main branch)
+       📊 Production Scan
     ================================================== */
     lastScanProduction: {
       type: ScanSchema,
@@ -71,7 +70,7 @@ const RepositorySchema = new mongoose.Schema(
     },
 
     /* ==================================================
-       🎭 Demo Scan (generated branch)
+       🎭 Demo Scan
     ================================================== */
     lastScanDemo: {
       type: ScanSchema,
@@ -79,7 +78,7 @@ const RepositorySchema = new mongoose.Schema(
     },
 
     /* ==================================================
-       🔀 Currently Active Demo Branch
+       🔀 Demo Branch
     ================================================== */
     demoBranch: {
       type: String,
@@ -87,8 +86,7 @@ const RepositorySchema = new mongoose.Schema(
     },
 
     /* ==================================================
-       🗂 Backward Compatibility (Optional)
-       You may remove later if unused
+       🗂 Backward Compatibility
     ================================================== */
     lastScan: {
       type: ScanSchema,

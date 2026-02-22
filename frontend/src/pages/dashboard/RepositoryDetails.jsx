@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../api/axios";
 import {
@@ -19,7 +19,10 @@ export default function RepositoryDetails() {
   const [generating, setGenerating] = useState(false);
   const [activeSession, setActiveSession] = useState(null);
 
-  const [mode, setMode] = useState("production"); // 🔥 NEW
+  const [mode, setMode] = useState("production");
+
+  const [secrets, setSecrets] = useState([]);
+  const [secretInputs, setSecretInputs] = useState({});
 
   /* ===============================
      Load Repository Data
@@ -29,6 +32,11 @@ export default function RepositoryDetails() {
       const res = await api.get(`/api/repo/${owner}/${repoName}`);
       setRepoData(res.data);
       setActiveSession(res.data.activeSession || null);
+
+      const secretRes = await api.get(
+        `/api/repo/${owner}/${repoName}/secrets`
+      );
+      setSecrets(secretRes.data || []);
     } catch (err) {
       console.error(err);
       setError("Failed to load repository details");
@@ -75,7 +83,60 @@ export default function RepositoryDetails() {
   }, [activeSession]);
 
   /* ===============================
-     Manual Scan (Mode Aware)
+     Mode Based Scan Selection
+  =============================== */
+  const scanData =
+    mode === "production"
+      ? repoData?.lastScanProduction
+      : repoData?.lastScanDemo;
+
+  const maturity = scanData?.maturity;
+  const totalScore = maturity?.totalScore || 0;
+
+  const getLevelColor = () => {
+    if (totalScore >= 80) return "text-emerald-400";
+    if (totalScore >= 50) return "text-yellow-400";
+    return "text-red-400";
+  };
+
+  /* ===============================
+     Required ENV Logic
+  =============================== */
+
+  const requiredVars = scanData?.raw?.envVars || [];
+
+  const configuredKeys = useMemo(
+    () => secrets.map((s) => s.key),
+    [secrets]
+  );
+
+  const missingVars = requiredVars.filter(
+    (v) => !configuredKeys.includes(v)
+  );
+
+  const allConfigured =
+    requiredVars.length > 0 && missingVars.length === 0;
+
+  /* ===============================
+     Save Secret
+  =============================== */
+
+  const handleSaveSecret = async (key) => {
+    const value = secretInputs[key];
+    if (!value) return;
+
+    await api.post("/api/secrets/save", {
+      repoFullName,
+      key,
+      value,
+    });
+
+    setSecretInputs((prev) => ({ ...prev, [key]: "" }));
+    await loadRepo();
+  };
+
+  /* ===============================
+     Manual Scan
   =============================== */
   const handleScan = async () => {
     setScanning(true);
@@ -107,11 +168,21 @@ export default function RepositoryDetails() {
   };
 
   /* ===============================
-     Generate Files
+     Generate Files (Blocked if Missing ENV)
   =============================== */
   const handleGenerate = async () => {
+    if (!allConfigured) {
+      alert("Configure all required environment variables first.");
+      return;
+    }
+
     setGenerating(true);
+
     try {
+      await api.post("/api/secrets/sync", {
+        repoFullName,
+      });
+
       const res = await api.post("/api/generate-files", {
         repoFullName,
       });
@@ -132,37 +203,11 @@ export default function RepositoryDetails() {
     }
   };
 
-  /* ===============================
-     Loading & Error
-  =============================== */
-  if (loading) {
-    return (
-      <div className="text-slate-400">
-        Loading repository details...
-      </div>
-    );
-  }
+  if (loading)
+    return <div className="text-slate-400">Loading...</div>;
 
-  if (error) {
+  if (error)
     return <div className="text-red-400">{error}</div>;
-  }
-
-  /* ===============================
-     Mode Based Scan Selection
-  =============================== */
-  const scanData =
-    mode === "production"
-      ? repoData?.lastScanProduction
-      : repoData?.lastScanDemo;
-
-  const maturity = scanData?.maturity;
-  const totalScore = maturity?.totalScore || 0;
-
-  const getLevelColor = () => {
-    if (totalScore >= 80) return "text-emerald-400";
-    if (totalScore >= 50) return "text-yellow-400";
-    return "text-red-400";
-  };
 
   return (
     <div className="space-y-8">
@@ -177,7 +222,7 @@ export default function RepositoryDetails() {
         </p>
       </div>
 
-      {/* ================= MODE TOGGLE ================= */}
+      {/* MODE TOGGLE */}
       <div className="flex gap-4">
         <button
           onClick={() => setMode("production")}
@@ -202,36 +247,7 @@ export default function RepositoryDetails() {
         </button>
       </div>
 
-      {/* ================= AI DEVOPS AGENT ================= */}
-      <div className="bg-slate-900 border border-purple-700/40 rounded-xl p-6">
-
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-purple-400">
-            AI DevOps Agent
-          </h2>
-
-          {!activeSession && (
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm text-white disabled:opacity-50"
-            >
-              {generating
-                ? "Starting Agent..."
-                : "✨ Auto-Fix Missing Components"}
-            </button>
-          )}
-        </div>
-
-        {activeSession && (
-          <div className="text-sm text-slate-400">
-            Session ID: {activeSession.sessionId} <br />
-            Status: {activeSession.status}
-          </div>
-        )}
-      </div>
-
-      {/* ================= SUMMARY ================= */}
+      {/* SUMMARY */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex justify-between items-center">
         <div>
           <div className="text-sm text-slate-400">
@@ -256,53 +272,76 @@ export default function RepositoryDetails() {
         </button>
       </div>
 
-      {/* ================= MATURITY BREAKDOWN ================= */}
-      {maturity && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-6">
-            Maturity Breakdown
+      {/* ENVIRONMENT SETUP (AFTER SCAN) */}
+      {requiredVars.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-white">
+            Required Environment Variables
           </h2>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {Object.entries(maturity.categories).map(
-              ([key, category]) => (
-                <div
-                  key={key}
-                  className="border border-slate-800 rounded-lg p-5"
-                >
-                  <div className="flex justify-between mb-4">
-                    <span className="capitalize text-white font-medium">
-                      {key}
-                    </span>
-                    <span className="text-slate-400">
-                      {category.score} / {category.max}
-                    </span>
-                  </div>
+          {requiredVars.map((key) => {
+            const configured = configuredKeys.includes(key);
 
-                  <div className="space-y-3">
-                    {category.checks.map((check) => (
-                      <div
-                        key={check.key}
-                        className="flex justify-between text-sm"
-                      >
-                        <span className="text-slate-400">
-                          {check.key}
-                        </span>
-
-                        {check.passed ? (
-                          <CheckCircleIcon className="h-5 w-5 text-emerald-400" />
-                        ) : (
-                          <XCircleIcon className="h-5 w-5 text-red-400" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
+            return (
+              <div
+                key={key}
+                className="flex justify-between items-center border border-slate-800 rounded-lg p-3"
+              >
+                <div className="flex items-center gap-2">
+                  {configured ? (
+                    <CheckCircleIcon className="h-5 w-5 text-emerald-400" />
+                  ) : (
+                    <XCircleIcon className="h-5 w-5 text-red-400" />
+                  )}
+                  <span className="text-white">{key}</span>
                 </div>
-              )
-            )}
-          </div>
+
+                {!configured && (
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      placeholder="Enter value"
+                      value={secretInputs[key] || ""}
+                      onChange={(e) =>
+                        setSecretInputs((prev) => ({
+                          ...prev,
+                          [key]: e.target.value,
+                        }))
+                      }
+                      className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
+                    />
+                    <button
+                      onClick={() => handleSaveSecret(key)}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1 rounded"
+                    >
+                      Save
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
+
+      {/* GENERATE */}
+      <div className="bg-slate-900 border border-purple-700/40 rounded-xl p-6">
+        <button
+          onClick={handleGenerate}
+          disabled={generating || !allConfigured}
+          className="px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg text-white disabled:opacity-50"
+        >
+          {generating
+            ? "Preparing Production Setup..."
+            : "✨ Auto-Fix Missing Components"}
+        </button>
+
+        {!allConfigured && requiredVars.length > 0 && (
+          <div className="text-red-400 text-sm mt-3">
+            Configure all required environment variables before generation.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
