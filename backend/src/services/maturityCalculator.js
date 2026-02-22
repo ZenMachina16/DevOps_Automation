@@ -1,39 +1,56 @@
 export function calculateMaturity(raw) {
   const model = {
     infrastructure: {
-      max: 25,
+      max: 30,
       checks: [
-        { key: "dockerfile", passed: raw.dockerfile, weight: 10 },
-        { key: "compose", passed: false, weight: 5 }, // add detection later
-        { key: "envConfig", passed: false, weight: 5 },
-        { key: "portExposure", passed: false, weight: 5 }
+        {
+          key: "dockerfile",
+          passed: raw.dockerfile === true,
+          weight: 20
+        },
+        {
+          key: "portExposure",
+          passed: raw.portExposed === true, // future detection
+          weight: 10
+        }
       ]
     },
+
     cicd: {
-      max: 25,
+      max: 30,
       checks: [
-        { key: "workflow", passed: raw.ci, weight: 8 },
-        { key: "testStep", passed: false, weight: 7 },
-        { key: "cacheStrategy", passed: false, weight: 5 },
-        { key: "separateBuildJob", passed: false, weight: 5 }
+        {
+          key: "workflow",
+          passed: raw.ci === true,
+          weight: 20
+        },
+        {
+          key: "testStep",
+          passed: raw.ciHasTests === true, // future detection
+          weight: 10
+        }
       ]
     },
-    quality: {
-      max: 25,
-      checks: [
-        { key: "testsFolder", passed: raw.tests, weight: 10 },
-        { key: "lintConfig", passed: false, weight: 5 },
-        { key: "buildScript", passed: false, weight: 5 },
-        { key: "startScript", passed: false, weight: 5 }
-      ]
-    },
+
     documentation: {
-      max: 25,
+      max: 20,
       checks: [
-        { key: "readme", passed: raw.readme, weight: 10 },
-        { key: "setupDocs", passed: false, weight: 5 },
-        { key: "envDocs", passed: false, weight: 5 },
-        { key: "deployDocs", passed: false, weight: 5 }
+        {
+          key: "readme",
+          passed: raw.readme === true,
+          weight: 20
+        }
+      ]
+    },
+
+    quality: {
+      max: 20,
+      checks: [
+        {
+          key: "tests",
+          passed: raw.tests === true,
+          weight: 20
+        }
       ]
     }
   };

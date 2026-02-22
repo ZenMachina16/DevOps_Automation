@@ -207,6 +207,35 @@ export async function gapDetector({
     p.toLowerCase().endsWith("dockerfile")
   );
 
+  // -------------------------------
+// Detect Port Exposure in Dockerfile
+// -------------------------------
+let portExposed = false;
+
+if (hasAnyDockerfile) {
+  const dockerPath = paths.find((p) =>
+    p.toLowerCase().endsWith("dockerfile")
+  );
+
+  if (dockerPath) {
+    const dockerContent = await fetchRawFile({
+      owner,
+      repo,
+      path: dockerPath,
+      branch,
+      installationId,
+    });
+
+    if (dockerContent) {
+      // Look for EXPOSE instruction
+      const exposeMatch = dockerContent.match(/EXPOSE\s+\d+/i);
+      if (exposeMatch) {
+        portExposed = true;
+      }
+    }
+  }
+}
+
   const usesGithubActions = paths.some((p) =>
     p.startsWith(".github/workflows/")
   );
@@ -280,11 +309,11 @@ export async function gapDetector({
 
 
   return {
-  // Core detection (for maturity engine)
   dockerfile: hasAnyDockerfile,
   ci: usesGithubActions,
   readme: hasReadme,
   tests: hasTests,
+  portExposed, // 🔥 NEW
 
   // Extended intelligence (keep your advanced data)
   hasBackend,
