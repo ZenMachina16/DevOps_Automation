@@ -1,319 +1,210 @@
-# 🚀 ShipIQ – GitHub App–Powered DevOps Automation Platform
+<div align="center">
 
-ShipIQ is a **secure DevOps automation platform** that integrates with GitHub using a **GitHub App (not PATs)** to:
+# ShipIQ
 
-* Scan repositories for CI/CD & DevOps gaps
-* Detect Docker, tests, workflows, and env requirements
-* Generate missing DevOps files automatically (via n8n)
-* Monitor GitHub Actions **live**
-* Classify CI failures and trigger intelligent retries
+**GitHub App–Powered DevOps Automation Platform**
 
----
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-Express-green.svg)](https://nodejs.org)
+[![React](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-61dafb.svg)](https://reactjs.org)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248.svg)](https://mongodb.com)
 
-## ✨ Key Features
+*From "it works locally" to production-ready — automatically.*
 
-* 🔐 **No Personal Access Tokens (PATs)** — GitHub App only
-* 🧠 **Workflow Intelligence** (step-level CI classification)
-* ⚙️ **Automated DevOps Generation** (Dockerfile, CI, tests)
-* 🔁 **Classifier-driven retries**
-* 📦 **Repo-scoped access with auto-expiring tokens**
-* 🌐 Works for **users & organizations**
+[Demo](#demo) · [Features](#features) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Security](#security)
+
+</div>
 
 ---
 
-## 🏗️ Architecture Overview
+## Overview
 
-```
-User → OAuth Login → ShipIQ
-User → Install GitHub App
-ShipIQ → Installation Token → GitHub API
-ShipIQ → Repo Scan → Gap Report
-ShipIQ → DevOps Generation → n8n
-GitHub Actions → Webhooks → ShipIQ Classifier
-```
+ShipIQ is a DevOps automation platform built for small-to-mid-sized engineering teams. It integrates through **GitHub Apps** (no Personal Access Tokens) to automatically detect missing DevOps infrastructure, generate production-ready artifacts, and monitor CI/CD workflows in real time.
+
+Instead of spending weeks manually configuring pipelines, teams get Dockerfiles, GitHub Actions workflows, and deployment validation generated and committed — in seconds.
 
 ---
 
-## 🔑 Authentication Model (IMPORTANT)
+## Features
 
-| Mechanism          | Purpose             |
-| ------------------ | ------------------- |
-| GitHub OAuth       | User identity only  |
-| GitHub App         | Repository access   |
-| Installation Token | API calls to GitHub |
-| Webhooks           | CI/CD intelligence  |
-
-> OAuth **does NOT** give repo access
-> GitHub App **DOES**
-
----
-
-## 🧩 GitHub App Setup
-
-### 1️⃣ Create GitHub App
-
-**GitHub → Settings → Developer Settings → GitHub Apps → New App**
-
-**Basic Info**
-
-* App Name: `ShipIQ`
-* Homepage URL:
-
-  ```
-  http://localhost:2000
-  ```
-
-**OAuth Callback URL**
-
-```
-http://localhost:7000/auth/callback
-```
+| Capability | Description |
+|---|---|
+|  **Secure Authentication** | GitHub App–based auth — no PATs required |
+|  **Repository Analysis** | Automatically detects missing DevOps components |
+|  **Artifact Generation** | Generates Dockerfiles, CI/CD pipelines, test scaffolds |
+|  **Failure Classification** | Parses workflow logs and classifies deployment failures |
+|  **Intelligent Retry** | Auto-retries recoverable failures via n8n automation |
+|  **Real-time Tracking** | Monitors GitHub Actions stages live |
+|  **Webhook Lifecycle** | Deployment events driven by GitHub webhooks |
+|  **Multi-repo Support** | Organization-level scaling across repositories |
+|  **Secret Handling** | SHA-256 credential hashing, no plain-text storage |
 
 ---
 
-### 2️⃣ Repository Permissions (READ ONLY)
+## Why ShipIQ
 
-| Permission | Level |
-| ---------- | ----- |
-| Contents   | Read  |
-| Metadata   | Read  |
-| Actions    | Read  |
-| Workflows  | Read  |
-| Checks     | Read  |
+Most growing repositories are missing critical production infrastructure:
 
-❗ Write access is **not required**
+- Dockerfiles and container configuration
+- CI/CD pipelines
+- Automated test scaffolding
+- Deployment validation
+- Environment management
+- Monitoring visibility
 
----
-
-### 3️⃣ Webhook Configuration (CRITICAL)
-
-**Webhook URL**
-
-```
-https://<your-domain-or-ngrok>/api/github/webhook
-```
-
-**Content type**
-
-```
-application/json
-```
-
-**Events to Subscribe**
-
-* ✅ workflow_job (**MANDATORY**)
-* workflow_run (optional)
-* installation_repositories (recommended)
-
-> ⚠️ Without `workflow_job`, CI logs & classifier will NOT work.
+Setting these up manually requires time and DevOps expertise that many teams don't yet have. ShipIQ eliminates that bottleneck — it analyzes repositories and generates the missing infrastructure automatically, without requiring developers to first master every DevOps tool.
 
 ---
 
-### 4️⃣ Generate Private Key
+## Architecture
 
-* Click **Generate private key**
-* Download `.pem`
-* Store securely (never commit)
+```
+User ──► OAuth Login ──────────────────► ShipIQ
+User ──► Install GitHub App ───────────► ShipIQ
+                                             │
+                              ┌──────────────┼──────────────┐
+                              ▼              ▼              ▼
+                       Repository Scan  Gap Detection  Artifact Generation
+                                                            │
+                              ┌─────────────────────────────┤
+                              ▼                             ▼
+                         Validation                  Pull Request Creation
+                              │
+                    GitHub Actions Triggers
+                              │
+                              ▼
+                    Webhooks ──► ShipIQ Classifier
+```
+
+### Platform Layers
+
+- **Frontend Dashboard** — React + TypeScript interface for repo management and deployment tracking
+- **Authentication Layer** — GitHub OAuth for identity; GitHub Apps for repository access
+- **Repository Analysis Engine** — Scans for framework types, Docker support, CI/CD gaps
+- **Artifact Generator** — Template-based generation of Dockerfiles, workflows, configs
+- **Validation Pipeline** — YAML, Docker, syntax, and dependency checks before commit
+- **GitHub Integration Layer** — Branch creation, file commits, PR automation
+- **Deployment Tracking Layer** — Real-time Actions monitoring and stage classification
+- **Storage Layer** — MongoDB for repository state, run history, and credentials
 
 ---
 
-## 🌱 Environment Variables
+## Authentication Model
 
-### Backend `.env`
+ShipIQ intentionally avoids Personal Access Tokens in favor of the GitHub Apps model.
 
-```env
-# Server
-PORT=7000
-SESSION_SECRET=dev_secret
+| Mechanism | Purpose |
+|---|---|
+| GitHub OAuth | User identity verification only |
+| GitHub App | Scoped repository access |
+| Installation Tokens | Temporary, auto-expiring GitHub API access |
+| Webhooks | Deployment lifecycle event delivery |
 
-# MongoDB
-MONGO_URI=mongodb://localhost:27017/shipiq
+**Benefits of GitHub Apps over PATs:**
 
-# GitHub OAuth
-GITHUB_CLIENT_ID=xxxx
-GITHUB_CLIENT_SECRET=xxxx
+- Per-repo permission scoping
+- Short-lived, auto-expiring tokens
+- Safer access across multiple repositories
+- Organization-level scalability without shared credentials
 
-# GitHub App
-GITHUB_APP_ID=2580135
-GITHUB_PRIVATE_KEY_PATH=./keys/shipiq.pem
+---
 
-# Webhooks
-GITHUB_WEBHOOK_SECRET=xxxx
+## Repository Analysis
 
-# n8n
-N8N_WEBHOOK_URL=https://n8n.yourdomain/webhook/devops
-N8N_RETRY_WEBHOOK_URL=https://n8n.yourdomain/webhook/retry
+The analysis engine scans each repository to identify missing DevOps components before generating anything.
+
+**Detected signals include:**
+
+- Frontend and backend framework type
+- Existing Docker configuration
+- GitHub Actions workflow presence
+- Test runner configuration
+- Deployment readiness indicators
+- Documentation gaps
+- Environment variable requirements
+
+**Directories excluded from scanning:**
+
+```
+node_modules/   dist/   build/   coverage/   logs/
 ```
 
 ---
 
-## ▶️ Running Locally
+## Artifact Generation
 
-### Backend
+Once gaps are identified, ShipIQ generates production-ready DevOps artifacts using **deterministic template matching** — not LLM-driven generation.
 
-```bash
-cd backend
-npm install
-node index.js
+**Generated artifacts:**
+
+- `Dockerfile` — optimized per detected framework
+- GitHub Actions workflows — install, test, build, deploy stages
+- Test scaffolding — framework-appropriate test setup
+- `README` updates — badges, setup instructions
+- Deployment configurations
+- Environment variable templates (`.env.example`)
+
+### Performance
+
+Switching from LLM-driven to template-based generation yielded a significant improvement:
+
+```
+Before  ~90–120 seconds per repository
+After   ~3–4 seconds per repository
 ```
 
-Expected logs:
-
-```
-ENV CHECK: { GITHUB_CLIENT_ID: 'FOUND', GITHUB_APP_ID: 'FOUND' }
-✅ MongoDB connected
-✅ Server listening on port 7000
-```
+This approach also improves consistency — the same repository type always produces the same artifact structure.
 
 ---
 
-### Frontend
+## Validation Pipeline
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open:
+All generated artifacts pass through a validation pipeline before being committed.
 
 ```
-http://localhost:2000
+Generated Artifacts
+        │
+        ▼
+  YAML Validation
+        │
+        ▼
+  Docker Build Check
+        │
+        ▼
+  Syntax & Dependency Verification
+        │
+        ▼
+  Test Execution
+        │
+        ▼
+  Deployment Validation
+        │
+    ┌───┴───┐
+  PASS     FAIL
+    │         │
+    ▼         ▼
+  Branch   Error
+  + PR     Report
 ```
+
+On success, ShipIQ automatically:
+1. Creates a new branch
+2. Commits the generated files
+3. Opens a pull request for team review
 
 ---
 
-## 👤 User Onboarding Flow
+## CI/CD Intelligence
 
-### 1️⃣ OAuth Login
-
-```
-GET /auth/github
-```
-
-* Authenticates user
-* Identity only (no repo access)
-
----
-
-### 2️⃣ Install GitHub App
+ShipIQ monitors GitHub Actions in real time, tracking workflows through logical deployment stages:
 
 ```
-GET /auth/github-app/install
+INSTALL_DEPS → TEST → DOCKER_BUILD → DOCKER_RUN → VERIFY_RUNNING → LOG_SCAN
 ```
 
-* User selects repositories
-* Installation ID stored in MongoDB
-* Repo list fetched using installation token
+Workflow logs and annotations are parsed to classify each failure automatically.
 
----
-
-### 3️⃣ Auth Status (Source of Truth)
-
-```
-GET /auth/status
-```
-
-Response:
-
-```json
-{
-  "loggedIn": true,
-  "hasInstallation": true,
-  "installationId": 102540060
-}
-```
-
----
-
-## 🔍 Repository Scanning
-
-### Endpoint
-
-```
-POST /api/scan
-```
-
-### Payload
-
-```json
-{
-  "repoFullName": "owner/repo"
-}
-```
-
-### What ShipIQ Detects
-
-* Backend / frontend structure
-* Dockerfile presence
-* GitHub Actions workflows
-* Test configuration
-* README
-* Environment variables
-* CI/CD gaps
-
----
-
-## 🤖 DevOps File Generation (n8n)
-
-### Endpoint
-
-```
-POST /api/generate-files
-```
-
-### Payload
-
-```json
-{
-  "repoFullName": "owner/repo"
-}
-```
-
-### Flow
-
-1. Scan repository
-2. Build canonical context
-3. Send payload to n8n
-4. Generate DevOps files
-5. Return generated artifacts
-
----
-
-## 🔔 GitHub Webhooks & CI Intelligence
-
-### Webhook Endpoint
-
-```
-POST /api/github/webhook
-```
-
-### Supported Events
-
-* `workflow_job.in_progress`
-* `workflow_job.completed`
-
----
-
-### 🟡 Live CI Stage Tracking
-
-Maps GitHub workflow steps → ShipIQ stages:
-
-```
-INSTALL_DEPS
-TEST
-DOCKER_BUILD
-DOCKER_RUN
-LOG_SCAN
-```
-
-Displayed in real time during workflow execution.
-
----
-
-### 🧠 Final CI Classification
-
-After workflow completion, ShipIQ classifies the run:
+**Example failure classification output:**
 
 ```json
 {
@@ -323,74 +214,70 @@ After workflow completion, ShipIQ classifies the run:
 }
 ```
 
----
-
-### 🔁 Intelligent Retry
-
-If:
-
-* CI fails
-* Classifier marks retryable
-
-Then ShipIQ triggers:
-
-```
-POST → N8N_RETRY_WEBHOOK_URL
-```
+When a failure is classified as retryable, the intelligent retry system triggers a fresh workflow run automatically via n8n — no manual intervention required.
 
 ---
 
-## 🚨 Common Issues & Fixes
+## Security
 
-### ❌ No CI Logs After Migration
+Security was a first-class design consideration throughout the platform.
 
-**Cause**
-
-* `workflow_job` event not enabled
-
-**Fix**
-
-* Enable in GitHub App
-* Reinstall app
+- **No PAT-based auth** — GitHub Apps only, with least-privilege scoping
+- **Webhook verification** — all incoming events validated before processing
+- **Auto-expiring tokens** — installation tokens rotate automatically
+- **SHA-256 credential hashing** — secrets never stored in plain text
+- **GitHub Environment Secrets** — sensitive values injected at runtime, not hardcoded
 
 ---
 
-### ❌ 404 on Installation Token
+## Tech Stack
 
-**Cause**
+### Frontend
+- **React** + **TypeScript**
+- **Tailwind CSS**
+- **Vite**
 
-* App reinstalled → new installation ID
+### Backend
+- **Node.js** + **Express**
+- **MongoDB**
 
-**Fix**
-
-* Update MongoDB
-* Reinstall app after permission changes
-
----
-
-## 🔐 Security Guarantees
-
-| Feature              | Status |
-| -------------------- | ------ |
-| No PATs              | ✅      |
-| Repo-scoped access   | ✅      |
-| Auto-expiring tokens | ✅      |
-| Least privilege      | ✅      |
-| Webhook verification | ✅      |
+### DevOps & Automation
+- **GitHub Actions**
+- **Docker**
+- **n8n** (workflow automation)
+- **GitHub Apps**
 
 ---
 
-## 📌 Final Notes
+## Results
 
-* OAuth ≠ Repository Access
-* GitHub App = Single Source of GitHub Permissions
-* Webhooks belong to **App**, not individual repos
-* Installation tokens are the **only** GitHub API access method
+| Metric | Outcome |
+|---|---|
+| Artifact generation time | ~90–120s → ~3–4s |
+| Artifact consistency | Significantly improved with template-based generation |
+| CI/CD monitoring | Fully automated, stage-level visibility |
+| Failure classification | Automatic, with retryable detection |
+| Multi-repo scaling | Organization-level support without credential sharing |
 
 ---
 
-## ✅ Status
+## Roadmap
 
-✔ Production-ready
-✔ Scales to org installs
-✔ CI intelligence fully automated
+- [ ] AI-assisted debugging agents for failure root cause analysis
+- [ ] Self-healing deployment workflows
+- [ ] Kubernetes deployment manifest generation
+- [ ] Terraform infrastructure scaffolding
+- [ ] Multi-cloud deployment orchestration
+- [ ] Predictive CI failure analysis
+
+---
+
+## Demo
+
+> 📹 [Watch the demo](#) *(link coming soon)*
+
+---
+
+## License
+
+[MIT](LICENSE) © ShipIQ
