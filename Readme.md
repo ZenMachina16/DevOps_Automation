@@ -274,7 +274,7 @@ Security was a first-class design consideration throughout the platform.
 
 ## Demo
 
-> 📹 [Watch the demo](#) *(link coming soon)*
+> 📹 [Watch the demo](https://youtu.be/OA7HFOXx5g0?si=BfKYCQRGeBhtOstr) 
 
 ---
 
